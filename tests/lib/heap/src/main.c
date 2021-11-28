@@ -11,7 +11,7 @@
  * platform, with workarounds.
  */
 
-#if defined(CONFIG_BOARD_MPS2_AN521)
+#if defined(CONFIG_SOC_MPS2_AN521) && defined(CONFIG_QEMU_TARGET)
 /* mps2_an521 blows up if allowed to link into large area, even though
  * the link is successful and it claims the memory is there.  We get
  * hard faults on boot in qemu before entry to cstart() once MEMSZ is
@@ -38,6 +38,16 @@
 
 #define BIG_HEAP_SZ MIN(256 * 1024, MEMSZ / 3)
 #define SMALL_HEAP_SZ MIN(BIG_HEAP_SZ, 2048)
+
+/* With enabling SYS_HEAP_RUNTIME_STATS, the size of struct z_heap
+ * will increase 16 bytes on 64 bit CPU.
+ */
+#ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
+#define SOLO_FREE_HEADER_HEAP_SZ (80)
+#else
+#define SOLO_FREE_HEADER_HEAP_SZ (64)
+#endif
+
 #define SCRATCH_SZ (sizeof(heapmem) / 2)
 
 /* The test memory.  Make them pointer arrays for robust alignment
@@ -104,6 +114,23 @@ static void check_fill(void *p)
 void *testalloc(void *arg, size_t bytes)
 {
 	void *ret = sys_heap_alloc(arg, bytes);
+
+	if (ret != NULL) {
+		/* White box: the heap internals will allocate memory
+		 * in 8 chunk units, no more than needed, but with a
+		 * header prepended that is 4 or 8 bytes.  Use this to
+		 * validate the block_size predicate.
+		 */
+		size_t blksz = sys_heap_usable_size(arg, ret);
+		size_t addr = (size_t) ret;
+		size_t chunk = ROUND_DOWN(addr - 1, 8);
+		size_t hdr = addr - chunk;
+		size_t expect = ROUND_UP(bytes + hdr, 8) - hdr;
+
+		zassert_equal(blksz, expect,
+			      "wrong size block returned bytes = %ld ret = %ld",
+			      bytes, blksz);
+	}
 
 	fill_block(ret, bytes);
 	sys_heap_validate(arg);
@@ -192,6 +219,11 @@ static void test_big_heap(void)
 	struct sys_heap heap;
 	struct z_heap_stress_result result;
 
+	if (IS_ENABLED(CONFIG_SYS_HEAP_SMALL_ONLY)) {
+		TC_PRINT("big heap support is disabled\n");
+		ztest_test_skip();
+	}
+
 	TC_PRINT("Testing big (%d byte) heap\n", (int) BIG_HEAP_SZ);
 
 	sys_heap_init(&heap, heapmem, BIG_HEAP_SZ);
@@ -202,6 +234,36 @@ static void test_big_heap(void)
 			100, &result);
 
 	log_result(BIG_HEAP_SZ, &result);
+}
+
+/* Test a heap with a solo free header.  A solo free header can exist
+ * only on a heap with 64 bit CPU (or chunk_header_bytes() == 8).
+ * With 64 bytes heap and 1 byte allocation on a big heap, we get:
+ *
+ *   0   1   2   3   4   5   6   7
+ * | h | h | b | b | c | 1 | s | f |
+ *
+ * where
+ * - h: chunk0 header
+ * - b: buckets in chunk0
+ * - c: chunk header for the first allocation
+ * - 1: chunk mem
+ * - s: solo free header
+ * - f: end marker / footer
+ */
+static void test_solo_free_header(void)
+{
+	struct sys_heap heap;
+
+	TC_PRINT("Testing solo free header in a heap\n");
+
+	sys_heap_init(&heap, heapmem, SOLO_FREE_HEADER_HEAP_SZ);
+	if (sizeof(void *) > 4U) {
+		sys_heap_alloc(&heap, 1);
+		zassert_true(sys_heap_validate(&heap), "");
+	} else {
+		ztest_test_skip();
+	}
 }
 
 /* Simple clobber detection */
@@ -329,7 +391,8 @@ void test_main(void)
 			 ztest_unit_test(test_realloc),
 			 ztest_unit_test(test_small_heap),
 			 ztest_unit_test(test_fragmentation),
-			 ztest_unit_test(test_big_heap)
+			 ztest_unit_test(test_big_heap),
+			 ztest_unit_test(test_solo_free_header)
 			 );
 
 	ztest_run_test_suite(lib_heap_test);

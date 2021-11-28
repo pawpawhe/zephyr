@@ -24,7 +24,7 @@
 #include "modem_cmd_handler.h"
 #include "modem_iface_uart.h"
 
-#define MDM_UART_DEV_NAME		  DT_INST_BUS_LABEL(0)
+#define MDM_UART_DEV			  DEVICE_DT_GET(DT_INST_BUS(0))
 #define MDM_CMD_TIMEOUT			  K_SECONDS(10)
 #define MDM_CMD_CONN_TIMEOUT		  K_SECONDS(120)
 #define MDM_REGISTRATION_TIMEOUT	  K_SECONDS(180)
@@ -40,7 +40,7 @@
 #define MDM_WAIT_FOR_RSSI_COUNT		  10
 #define MDM_WAIT_FOR_RSSI_DELAY		  K_SECONDS(2)
 #define BUF_ALLOC_TIMEOUT		  K_SECONDS(1)
-#define MDM_MAX_AT_RETRIES		  50
+#define MDM_MAX_BOOT_TIME		  K_SECONDS(50)
 
 /* Default lengths of certain things. */
 #define MDM_MANUFACTURER_LENGTH		  10
@@ -100,6 +100,7 @@ struct modem_data {
 	char mdm_imsi[MDM_IMSI_LENGTH];
 	char mdm_iccid[MDM_ICCID_LENGTH];
 #endif /* #if defined(CONFIG_MODEM_SIM_NUMBERS) */
+	int mdm_rssi;
 
 	/* bytes written to socket in last transaction */
 	int sock_written;

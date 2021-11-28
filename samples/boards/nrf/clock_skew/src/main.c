@@ -21,7 +21,7 @@ static const struct device *timer0;
 static struct timeutil_sync_config sync_config;
 static uint64_t counter_ref;
 static struct timeutil_sync_state sync_state;
-static struct k_delayed_work sync_work;
+static struct k_work_delayable sync_work;
 
 /* Convert local time in ticks to microseconds. */
 uint64_t local_to_us(uint64_t local)
@@ -186,13 +186,14 @@ static void sync_work_handler(struct k_work *work)
 			       us_to_text(ref_to_us(rec_ref)));
 			printf("%c%s\n", err_sign, us_to_text(err_us));
 
-			printf("Skew %f ; err %d ppb\n", skew,
+			printf("Skew %f ; err %d ppb\n", (double)skew,
 			       timeutil_sync_skew_to_ppb(skew));
 		} else if (rc < 0) {
 			printf("Sync update error: %d\n", rc);
 		}
 	}
-	k_delayed_work_submit(&sync_work, K_SECONDS(UPDATE_INTERVAL_S));
+	(void)k_work_schedule(k_work_delayable_from_work(work),
+			      K_SECONDS(UPDATE_INTERVAL_S));
 }
 
 void main(void)
@@ -253,8 +254,8 @@ void main(void)
 	printf("Timer wraps every %u s\n",
 	       (uint32_t)(BIT64(32) / sync_config.ref_Hz));
 
-	k_delayed_work_init(&sync_work, sync_work_handler);
-	rc = k_delayed_work_submit(&sync_work, K_NO_WAIT);
+	k_work_init_delayable(&sync_work, sync_work_handler);
+	rc = k_work_schedule(&sync_work, K_NO_WAIT);
 
 	printk("Started sync: %d\n", rc);
 }

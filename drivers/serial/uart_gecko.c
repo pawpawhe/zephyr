@@ -52,7 +52,8 @@ but not supported by this SOC"
 #endif
 
 #if defined(UART_GECKO_HW_FLOW_CONTROL) && \
-	(!defined(CONFIG_SOC_GECKO_HAS_INDIVIDUAL_PIN_LOCATION))
+	(!defined(CONFIG_SOC_GECKO_HAS_INDIVIDUAL_PIN_LOCATION) && \
+	 !defined(GPIO_USART_ROUTEEN_RTSPEN))
 #error "Driver not supporting hardware flow control for this SOC"
 #endif
 
@@ -547,9 +548,9 @@ static const struct uart_driver_api uart_gecko_driver_api = {
 	static struct uart_gecko_data uart_gecko_data_##idx;		       \
 									       \
 	DEVICE_DT_INST_DEFINE(idx, &uart_gecko_init, 			       \
-			    device_pm_control_nop, &uart_gecko_data_##idx,     \
+			    NULL, &uart_gecko_data_##idx,		       \
 			    &uart_gecko_cfg_##idx, PRE_KERNEL_1,	       \
-			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		       \
+			    CONFIG_SERIAL_INIT_PRIORITY,		       \
 			    &uart_gecko_driver_api);			       \
 									       \
 									       \
@@ -604,10 +605,10 @@ DT_INST_FOREACH_STATUS_OKAY(GECKO_UART_INIT)
 									       \
 	static struct uart_gecko_data usart_gecko_data_##idx;		       \
 									       \
-	DEVICE_DT_INST_DEFINE(idx, &uart_gecko_init, device_pm_control_nop,    \
+	DEVICE_DT_INST_DEFINE(idx, &uart_gecko_init, NULL,		       \
 			    &usart_gecko_data_##idx,			       \
 			    &usart_gecko_cfg_##idx, PRE_KERNEL_1,	       \
-			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		       \
+			    CONFIG_SERIAL_INIT_PRIORITY,		       \
 			    &uart_gecko_driver_api);			       \
 									       \
 	GECKO_USART_IRQ_HANDLER(idx)

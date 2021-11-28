@@ -63,6 +63,7 @@ static void tmslab_alloc_timeout(void *data)
 	struct k_mem_slab *pslab = (struct k_mem_slab *)data;
 	void *block[BLK_NUM], *block_fail;
 	int64_t tms;
+	int err;
 
 	for (int i = 0; i < BLK_NUM; i++) {
 		zassert_true(k_mem_slab_alloc(pslab, &block[i], K_NO_WAIT) == 0,
@@ -73,16 +74,21 @@ static void tmslab_alloc_timeout(void *data)
 	/** TESTPOINT: -ENOMEM Returned without waiting.*/
 	zassert_equal(k_mem_slab_alloc(pslab, &block_fail, K_NO_WAIT), -ENOMEM,
 		      NULL);
-	/** TESTPOINT: -EAGAIN Waiting period timed out*/
 	tms = k_uptime_get();
-	zassert_equal(k_mem_slab_alloc(pslab, &block_fail, K_MSEC(TIMEOUT)),
-		      -EAGAIN,
-		      NULL);
-	/**
-	 * TESTPOINT: timeout Maximum time to wait for operation to
-	 * complete (in milliseconds)
-	 */
-	zassert_true(k_uptime_delta(&tms) >= TIMEOUT, NULL);
+	err = k_mem_slab_alloc(pslab, &block_fail, K_MSEC(TIMEOUT));
+	if (IS_ENABLED(CONFIG_MULTITHREADING)) {
+		/** TESTPOINT: -EAGAIN Waiting period timed out*/
+		zassert_equal(err, -EAGAIN, NULL);
+		/**
+		 * TESTPOINT: timeout Maximum time to wait for operation to
+		 * complete (in milliseconds)
+		 */
+		zassert_true(k_uptime_delta(&tms) >= TIMEOUT, NULL);
+	} else {
+		/* If no multithreading any timeout is treated as K_NO_WAIT */
+		zassert_equal(err, -ENOMEM, NULL);
+		zassert_true(k_uptime_delta(&tms) < TIMEOUT, NULL);
+	}
 
 	for (int i = 0; i < BLK_NUM; i++) {
 		k_mem_slab_free(pslab, &block[i]);
@@ -113,7 +119,7 @@ static void tmslab_used_get(void *data)
 	zassert_equal(k_mem_slab_num_used_get(pslab), BLK_NUM, NULL);
 
 	zassert_equal(k_mem_slab_alloc(pslab, &block_fail, K_MSEC(TIMEOUT)),
-		      -EAGAIN,
+		      IS_ENABLED(CONFIG_MULTITHREADING) ? -EAGAIN : -ENOMEM,
 		      NULL);
 	zassert_equal(k_mem_slab_num_free_get(pslab), 0, NULL);
 	zassert_equal(k_mem_slab_num_used_get(pslab), BLK_NUM, NULL);
@@ -124,6 +130,51 @@ static void tmslab_used_get(void *data)
 		zassert_equal(k_mem_slab_num_used_get(pslab), BLK_NUM - 1 - i, NULL);
 	}
 }
+
+K_SEM_DEFINE(SEM_HELPERDONE, 0, 1);
+K_SEM_DEFINE(SEM_REGRESSDONE, 0, 1);
+static K_THREAD_STACK_DEFINE(stack, STACKSIZE);
+static struct k_thread HELPER;
+
+static void helper_thread(void *p0, void *p1, void *p2)
+{
+	void *ptr[BLK_NUM];           /* Pointer to memory block */
+
+	ARG_UNUSED(p0);
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+
+	(void)memset(ptr, 0, sizeof(ptr));
+
+	k_sem_take(&SEM_REGRESSDONE, K_FOREVER);
+
+	/* Get all blocks from the memory slab */
+	for (int i = 0; i < BLK_NUM; i++) {
+		/* Verify number of used blocks in the map */
+		zassert_equal(k_mem_slab_num_used_get(&kmslab), i,
+			      "Failed k_mem_slab_num_used_get");
+
+		/* Get memory block */
+		zassert_equal(k_mem_slab_alloc(&kmslab, &ptr[i], K_NO_WAIT), 0,
+			      "Failed k_mem_slab_alloc");
+	}
+
+	k_sem_give(&SEM_HELPERDONE);
+
+	k_sem_take(&SEM_REGRESSDONE, K_FOREVER);
+	k_mem_slab_free(&kmslab, &ptr[0]);
+
+
+	k_sem_take(&SEM_REGRESSDONE, K_FOREVER);
+
+	/* Free all the other blocks.  The first block are freed by this task */
+	for (int i = 1; i < BLK_NUM; i++) {
+		k_mem_slab_free(&kmslab, &ptr[i]);
+	}
+
+	k_sem_give(&SEM_HELPERDONE);
+
+}  /* helper thread */
 
 /*test cases*/
 /**
@@ -226,4 +277,54 @@ void test_mslab_used_get(void)
 {
 	tmslab_used_get(&mslab);
 	tmslab_used_get(&kmslab);
+}
+
+/**
+ * @brief Verify pending of allocating blocks
+ *
+ * @details First, helper thread got all memory blocks,
+ * and there is no free block left. k_mem_slab_alloc() with
+ * time out will fail and return -EAGAIN.
+ * Then k_mem_slab_alloc() without timeout tries to wait for
+ * a memory block until helper thread free one.
+ *
+ * @ingroup kernel_memory_slab_tests
+ */
+void test_mslab_pending(void)
+{
+	if (!IS_ENABLED(CONFIG_MULTITHREADING)) {
+		ztest_test_skip();
+		return;
+	}
+
+	int ret_value;
+	void *b;                        /* Pointer to memory block */
+
+	(void)k_thread_create(&HELPER, stack, STACKSIZE,
+			helper_thread, NULL, NULL, NULL,
+			7, 0, K_NO_WAIT);
+
+	k_sem_give(&SEM_REGRESSDONE);   /* Allow helper thread to run */
+
+	k_sem_take(&SEM_HELPERDONE, K_FOREVER);		/* Wait for helper thread to finish */
+
+	ret_value = k_mem_slab_alloc(&kmslab, &b, K_MSEC(20));
+	zassert_equal(-EAGAIN, ret_value,
+		      "Failed k_mem_slab_alloc, retValue %d\n", ret_value);
+
+	k_sem_give(&SEM_REGRESSDONE);
+
+	/* Wait for helper thread to free a block */
+
+	ret_value = k_mem_slab_alloc(&kmslab, &b, K_FOREVER);
+	zassert_equal(0, ret_value,
+		      "Failed k_mem_slab_alloc, ret_value %d\n", ret_value);
+
+	k_sem_give(&SEM_REGRESSDONE);
+
+	/* Wait for helper thread to complete */
+	k_sem_take(&SEM_HELPERDONE, K_FOREVER);
+
+	/* Free memory block */
+	k_mem_slab_free(&kmslab, &b);
 }

@@ -303,9 +303,6 @@ static int uart_xlnx_ps_init(const struct device *dev)
 	/* Set RX FIFO trigger at 1 data bytes. */
 	sys_write32(0x01U, reg_base + XUARTPS_RXWM_OFFSET);
 
-	/* Set RX timeout to 1, which will be 4 character time */
-	sys_write32(0x1U, reg_base + XUARTPS_RXTOUT_OFFSET);
-
 	/* Disable all interrupts, polling mode is default */
 	sys_write32(XUARTPS_IXR_MASK, reg_base + XUARTPS_IDR_OFFSET);
 
@@ -583,6 +580,7 @@ static inline bool uart_xlnx_ps_cfg2ll_hwctrl(
 	return true;
 }
 
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 /**
  * @brief Configures the UART device at run-time.
  *
@@ -639,6 +637,7 @@ static int uart_xlnx_ps_configure(const struct device *dev,
 
 	return 0;
 };
+#endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
 
 /**
  * @brief Converts a Mode Register bit mask to a parity configuration
@@ -787,6 +786,7 @@ static inline enum uart_config_flow_control uart_xlnx_ps_ll2cfg_hwctrl(
 	return UART_CFG_FLOW_CTRL_NONE;
 }
 
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 /**
  * @brief Returns the current configuration of the UART at run-time.
  *
@@ -824,6 +824,7 @@ static int uart_xlnx_ps_config_get(const struct device *dev,
 
 	return 0;
 }
+#endif /* CONFIG_UART_USE_RUNTIME_CONFIGURE */
 
 #if CONFIG_UART_INTERRUPT_DRIVEN
 
@@ -841,20 +842,18 @@ static int uart_xlnx_ps_fifo_fill(const struct device *dev,
 				  int size)
 {
 	const struct uart_xlnx_ps_dev_config *dev_cfg = DEV_CFG(dev);
-	uint32_t reg_val;
-	uint32_t reg_base;
-	int onum = 0;
+	uint32_t reg_base = dev_cfg->uconf.regs;
+	uint32_t data_iter = 0;
 
-	reg_base = dev_cfg->uconf.regs;
-	reg_val = sys_read32(reg_base + XUARTPS_SR_OFFSET);
-	while (onum < size && (reg_val & XUARTPS_SR_TXFULL) == 0) {
-		sys_write32((uint32_t)(tx_data[onum] & 0xFF),
-				reg_base + XUARTPS_FIFO_OFFSET);
-		onum++;
-		reg_val = sys_read32(reg_base + XUARTPS_SR_OFFSET);
+	sys_write32(XUARTPS_IXR_TXEMPTY, reg_base + XUARTPS_IDR_OFFSET);
+	while (size--) {
+		while ((sys_read32(reg_base + XUARTPS_SR_OFFSET) & XUARTPS_SR_TXFULL) != 0) {
+		}
+		sys_write32((uint32_t)tx_data[data_iter++], reg_base + XUARTPS_FIFO_OFFSET);
 	}
+	sys_write32(XUARTPS_IXR_TXEMPTY, reg_base + XUARTPS_IER_OFFSET);
 
-	return onum;
+	return data_iter;
 }
 
 /**
@@ -933,17 +932,12 @@ static void uart_xlnx_ps_irq_tx_disable(const struct device *dev)
 static int uart_xlnx_ps_irq_tx_ready(const struct device *dev)
 {
 	const struct uart_xlnx_ps_dev_config *dev_cfg = DEV_CFG(dev);
-	uint32_t reg_base;
-	uint32_t reg_val;
+	uint32_t reg_base = dev_cfg->uconf.regs;
+	uint32_t reg_val = sys_read32(reg_base + XUARTPS_SR_OFFSET);
 
-	reg_base = dev_cfg->uconf.regs;
-	reg_val = sys_read32(reg_base + XUARTPS_ISR_OFFSET);
-	if ((reg_val & (XUARTPS_IXR_TTRIG | XUARTPS_IXR_TXEMPTY)) == 0) {
+	if ((reg_val & (XUARTPS_SR_TTRIG | XUARTPS_SR_TXEMPTY)) == 0) {
 		return 0;
 	} else {
-		sys_write32(
-			(XUARTPS_IXR_TTRIG | XUARTPS_IXR_TXEMPTY),
-			reg_base + XUARTPS_ISR_OFFSET);
 		return 1;
 	}
 }
@@ -1012,11 +1006,9 @@ static void uart_xlnx_ps_irq_rx_disable(const struct device *dev)
 static int uart_xlnx_ps_irq_rx_ready(const struct device *dev)
 {
 	const struct uart_xlnx_ps_dev_config *dev_cfg = DEV_CFG(dev);
-	uint32_t reg_base;
-	uint32_t reg_val;
+	uint32_t reg_base = dev_cfg->uconf.regs;
+	uint32_t reg_val = sys_read32(reg_base + XUARTPS_ISR_OFFSET);
 
-	reg_base = dev_cfg->uconf.regs;
-	reg_val = sys_read32(reg_base + XUARTPS_ISR_OFFSET);
 	if ((reg_val & XUARTPS_IXR_RTRIG) == 0) {
 		return 0;
 	} else {
@@ -1103,7 +1095,7 @@ static int uart_xlnx_ps_irq_is_pending(const struct device *dev)
  */
 static int uart_xlnx_ps_irq_update(const struct device *dev)
 {
-	(void)dev;
+	ARG_UNUSED(dev);
 	return 1;
 }
 
@@ -1147,8 +1139,10 @@ static void uart_xlnx_ps_isr(const struct device *dev)
 static const struct uart_driver_api uart_xlnx_ps_driver_api = {
 	.poll_in = uart_xlnx_ps_poll_in,
 	.poll_out = uart_xlnx_ps_poll_out,
+#ifdef CONFIG_UART_USE_RUNTIME_CONFIGURE
 	.configure = uart_xlnx_ps_configure,
 	.config_get = uart_xlnx_ps_config_get,
+#endif
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.fifo_fill = uart_xlnx_ps_fifo_fill,
 	.fifo_read = uart_xlnx_ps_fifo_read,
@@ -1205,10 +1199,10 @@ static struct uart_xlnx_ps_dev_config uart_xlnx_ps_dev_cfg_##port = { \
 #define UART_XLNX_PS_INIT(port) \
 DEVICE_DT_INST_DEFINE(port, \
 	uart_xlnx_ps_init, \
-	device_pm_control_nop, \
+	NULL, \
 	&uart_xlnx_ps_dev_data_##port, \
 	&uart_xlnx_ps_dev_cfg_##port, \
-	PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, \
+	PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY, \
 	&uart_xlnx_ps_driver_api)
 
 #define UART_XLNX_INSTANTIATE(inst)		\

@@ -42,38 +42,47 @@ enum dma_addr_adj {
 	DMA_ADDR_ADJ_NO_CHANGE,
 };
 
+/* channel attributes */
+enum dma_channel_filter {
+	DMA_CHANNEL_NORMAL, /* normal DMA channel */
+	DMA_CHANNEL_PERIODIC, /* can be triggerred by periodic sources */
+};
+
 /**
+ * @struct dma_block_config
  * @brief DMA block configuration structure.
  *
- * source_address is block starting address at source
- * source_gather_interval is the address adjustment at gather boundary
- * dest_address is block starting address at destination
- * dest_scatter_interval is the address adjustment at scatter boundary
- * dest_scatter_count is the continuous transfer count between scatter
+ * @param source_address is block starting address at source
+ * @param source_gather_interval is the address adjustment at gather boundary
+ * @param dest_address is block starting address at destination
+ * @param dest_scatter_interval is the address adjustment at scatter boundary
+ * @param dest_scatter_count is the continuous transfer count between scatter
  *                    boundaries
- * source_gather_count is the continuous transfer count between gather
+ * @param source_gather_count is the continuous transfer count between gather
  *                     boundaries
- * block_size is the number of bytes to be transferred for this block.
  *
- * config is a bit field with the following parts:
- *     source_gather_en   [ 0 ]       - 0-disable, 1-enable
- *     dest_scatter_en    [ 1 ]       - 0-disable, 1-enable
+ * @param block_size is the number of bytes to be transferred for this block.
+ *
+ * @param config is a bit field with the following parts:
+ *
+ *     source_gather_en   [ 0 ]       - 0-disable, 1-enable.
+ *     dest_scatter_en    [ 1 ]       - 0-disable, 1-enable.
  *     source_addr_adj    [ 2 : 3 ]   - 00-increment, 01-decrement,
- *                                      10-no change
+ *                                      10-no change.
  *     dest_addr_adj      [ 4 : 5 ]   - 00-increment, 01-decrement,
- *                                      10-no change
+ *                                      10-no change.
  *     source_reload_en   [ 6 ]       - reload source address at the end of
  *                                      block transfer
- *                                      0-disable, 1-enable
+ *                                      0-disable, 1-enable.
  *     dest_reload_en     [ 7 ]       - reload destination address at the end
  *                                      of block transfer
- *                                      0-disable, 1-enable
+ *                                      0-disable, 1-enable.
  *     fifo_mode_control  [ 8 : 11 ]  - How full  of the fifo before transfer
  *                                      start. HW specific.
  *     flow_control_mode  [ 12 ]      - 0-source request served upon data
- *                                        availability
+ *                                        availability.
  *                                      1-source request postponed until
- *                                        destination request happens
+ *                                        destination request happens.
  *     reserved           [ 13 : 15 ]
  */
 struct dma_block_config {
@@ -117,44 +126,41 @@ typedef void (*dma_callback_t)(const struct device *dev, void *user_data,
 			       uint32_t channel, int status);
 
 /**
+ * @struct dma_config
  * @brief DMA configuration structure.
  *
- *     dma_slot             [ 0 : 6 ]   - which peripheral and direction
+ * @param dma_slot             [ 0 : 6 ]   - which peripheral and direction
  *                                        (HW specific)
- *     channel_direction    [ 7 : 9 ]   - 000-memory to memory,
+ * @param channel_direction    [ 7 : 9 ]   - 000-memory to memory,
  *                                        001-memory to peripheral,
  *                                        010-peripheral to memory,
  *                                        011-peripheral to peripheral,
  *                                        ...
- *     complete_callback_en [ 10 ]       - 0-callback invoked at completion only
+ * @param complete_callback_en [ 10 ]       - 0-callback invoked at completion only
  *                                        1-callback invoked at completion of
  *                                          each block
- *     error_callback_en    [ 11 ]      - 0-error callback enabled
+ * @param error_callback_en    [ 11 ]      - 0-error callback enabled
  *                                        1-error callback disabled
- *     source_handshake     [ 12 ]      - 0-HW, 1-SW
- *     dest_handshake       [ 13 ]      - 0-HW, 1-SW
- *     channel_priority     [ 14 : 17 ] - DMA channel priority
- *     source_chaining_en   [ 18 ]      - enable/disable source block chaining
+ * @param source_handshake     [ 12 ]      - 0-HW, 1-SW
+ * @param dest_handshake       [ 13 ]      - 0-HW, 1-SW
+ * @param channel_priority     [ 14 : 17 ] - DMA channel priority
+ * @param source_chaining_en   [ 18 ]      - enable/disable source block chaining
  *                                        0-disable, 1-enable
- *     dest_chaining_en     [ 19 ]      - enable/disable destination block
+ * @param dest_chaining_en     [ 19 ]      - enable/disable destination block
  *                                        chaining.
  *                                        0-disable, 1-enable
- *     linked_channel       [ 20 : 26 ] - after channel count exhaust will
+ * @param linked_channel       [ 20 : 26 ] - after channel count exhaust will
  *                                        initiate a channel service request
  *                                        at this channel
- *     reserved             [ 27 : 31 ]
- *
- *     source_data_size    [ 0 : 15 ]   - width of source data (in bytes)
- *     dest_data_size      [ 16 : 31 ]  - width of dest data (in bytes)
- *     source_burst_length [ 0 : 15 ]   - number of source data units
- *     dest_burst_length   [ 16 : 31 ]  - number of destination data units
- *
- *     block_count  is the number of blocks used for block chaining, this
+ * @param reserved             [ 27 : 31 ]
+ * @param source_data_size    [ 0 : 15 ]   - width of source data (in bytes)
+ * @param dest_data_size      [ 16 : 31 ]  - width of dest data (in bytes)
+ * @param source_burst_length [ 0 : 15 ]   - number of source data units
+ * @param dest_burst_length   [ 16 : 31 ]  - number of destination data units
+ * @param block_count  is the number of blocks used for block chaining, this
  *     depends on availability of the DMA controller.
- *
- *     user_data  private data from DMA client.
- *
- *     dma_callback see dma_callback_t for details
+ * @param user_data  private data from DMA client.
+ * @param dma_callback see dma_callback_t for details
  */
 struct dma_config {
 	uint32_t  dma_slot :             7;
@@ -194,12 +200,30 @@ struct dma_status {
 };
 
 /**
+ * DMA context structure
+ * Note: the dma_context shall be the first member
+ *       of DMA client driver Data, got by dev->data
+ *
+ * magic			- magic code to identify the context
+ * dma_channels		- dma channels
+ * atomic			- driver atomic_t pointer
+ *
+ */
+struct dma_context {
+	int32_t magic;
+	int dma_channels;
+	atomic_t *atomic;
+};
+
+/* magic code to identify context content */
+#define DMA_MAGIC 0x47494749
+
+/**
  * @cond INTERNAL_HIDDEN
  *
  * These are for internal use only, so skip these in
  * public documentation.
  */
-
 typedef int (*dma_api_config)(const struct device *dev, uint32_t channel,
 			      struct dma_config *config);
 
@@ -218,12 +242,29 @@ typedef int (*dma_api_stop)(const struct device *dev, uint32_t channel);
 typedef int (*dma_api_get_status)(const struct device *dev, uint32_t channel,
 				  struct dma_status *status);
 
+/**
+ * @typedef dma_chan_filter
+ * @brief channel filter function call
+ *
+ * filter function that is used to find the matched internal dma channel
+ * provide by caller
+ *
+ * @param dev Pointer to the DMA device instance
+ * @param channel the channel id to use
+ * @param filter_param filter function parameter, can be NULL
+ *
+ * @retval True on filter matched otherwise return False.
+ */
+typedef bool (*dma_api_chan_filter)(const struct device *dev,
+				int channel, void *filter_param);
+
 __subsystem struct dma_driver_api {
 	dma_api_config config;
 	dma_api_reload reload;
 	dma_api_start start;
 	dma_api_stop stop;
 	dma_api_get_status get_status;
+	dma_api_chan_filter chan_filter;
 };
 /**
  * @endcond
@@ -325,6 +366,105 @@ static inline int z_impl_dma_stop(const struct device *dev, uint32_t channel)
 		(const struct dma_driver_api *)dev->api;
 
 	return api->stop(dev, channel);
+}
+
+/**
+ * @brief request DMA channel.
+ *
+ * request DMA channel resources
+ * return -EINVAL if there is no valid channel available.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ * @param filter_param filter function parameter
+ *
+ * @retval dma channel if successful.
+ * @retval Negative errno code if failure.
+ */
+__syscall int dma_request_channel(const struct device *dev,
+				  void *filter_param);
+
+static inline int z_impl_dma_request_channel(const struct device *dev,
+					     void *filter_param)
+{
+	int i = 0;
+	int channel = -EINVAL;
+	const struct dma_driver_api *api =
+		(const struct dma_driver_api *)dev->api;
+	/* dma_context shall be the first one in dev data */
+	struct dma_context *dma_ctx = (struct dma_context *)dev->data;
+
+	if (dma_ctx->magic != DMA_MAGIC) {
+		return channel;
+	}
+
+	for (i = 0; i < dma_ctx->dma_channels; i++) {
+		if (!atomic_test_and_set_bit(dma_ctx->atomic, i)) {
+			channel = i;
+			if (api->chan_filter &&
+			    !api->chan_filter(dev, channel, filter_param)) {
+				atomic_clear_bit(dma_ctx->atomic, channel);
+				continue;
+			}
+			break;
+		}
+	}
+
+	return channel;
+}
+
+/**
+ * @brief release DMA channel.
+ *
+ * release DMA channel resources
+ *
+ * @param dev  Pointer to the device structure for the driver instance.
+ * @param channel  channel number
+ *
+ */
+__syscall void dma_release_channel(const struct device *dev,
+				   uint32_t channel);
+
+static inline void z_impl_dma_release_channel(const struct device *dev,
+					      uint32_t channel)
+{
+	struct dma_context *dma_ctx = (struct dma_context *)dev->data;
+
+	if (dma_ctx->magic != DMA_MAGIC) {
+		return;
+	}
+
+	if (channel < dma_ctx->dma_channels) {
+		atomic_clear_bit(dma_ctx->atomic, channel);
+	}
+
+}
+
+/**
+ * @brief DMA channel filter.
+ *
+ * filter channel by attribute
+ *
+ * @param dev  Pointer to the device structure for the driver instance.
+ * @param channel  channel number
+ * @param filter_param filter attribute
+ *
+ * @retval Negative errno code if not support
+ *
+ */
+__syscall int dma_chan_filter(const struct device *dev,
+				   int channel, void *filter_param);
+
+static inline int z_impl_dma_chan_filter(const struct device *dev,
+					      int channel, void *filter_param)
+{
+	const struct dma_driver_api *api =
+		(const struct dma_driver_api *)dev->api;
+
+	if (api->chan_filter) {
+		return api->chan_filter(dev, channel, filter_param);
+	}
+
+	return -ENOSYS;
 }
 
 /**

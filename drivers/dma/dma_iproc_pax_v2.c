@@ -1107,9 +1107,9 @@ static const struct dma_iproc_pax_cfg pax_dma_cfg = {
 
 DEVICE_DT_INST_DEFINE(0,
 		    &dma_iproc_pax_init,
-		    device_pm_control_nop,
+		    NULL,
 		    &pax_dma_data,
 		    &pax_dma_cfg,
 		    POST_KERNEL,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    CONFIG_DMA_INIT_PRIORITY,
 		    &pax_dma_driver_api);

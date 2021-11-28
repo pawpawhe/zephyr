@@ -251,15 +251,19 @@ def string_create_helper(region, memory_type,
         else:
             if memory_type != 'SRAM' and region == 'rodata':
                 align_size = 0
-                if memory_type in mpu_align.keys():
+                if memory_type in mpu_align:
                     align_size = mpu_align[memory_type]
 
                 linker_string += LINKER_SECTION_SEQ_MPU.format(memory_type.lower(), region, memory_type.upper(),
                                                                region.upper(), tmp, load_address_string, align_size)
             else:
-                linker_string += LINKER_SECTION_SEQ.format(memory_type.lower(), region, memory_type.upper(),
-                                                           region.upper(), tmp, load_address_string)
-
+                if memory_type == 'SRAM' and region == 'text':
+                    align_size = 0
+                    linker_string += LINKER_SECTION_SEQ_MPU.format(memory_type.lower(), region, memory_type.upper(),
+                                                                   region.upper(), tmp, load_address_string, align_size)
+                else:
+                    linker_string += LINKER_SECTION_SEQ.format(memory_type.lower(), region, memory_type.upper(),
+                                                               region.upper(), tmp, load_address_string)
             if load_address_in_flash:
                 linker_string += SECTION_LOAD_MEMORY_SEQ.format(memory_type.lower(), region, memory_type.upper(),
                                                                 region.upper())
@@ -395,6 +399,9 @@ def create_dict_wrt_mem():
     if args.input_rel_dict == '':
         sys.exit("Disable CONFIG_CODE_DATA_RELOCATION if no file needs relocation")
     for line in args.input_rel_dict.split(';'):
+        if ':' not in line:
+            continue
+
         mem_region, file_name = line.split(':', 1)
 
         file_name_list = glob.glob(file_name)

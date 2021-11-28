@@ -144,7 +144,7 @@ static int pcal6408a_pin_configure(const struct device *dev,
 	/* Drive strength configuration in this device is incompatible with
 	 * the currently available GPIO API flags, hence it is not supported.
 	 */
-	if ((flags & (GPIO_DS_ALT_LOW | GPIO_DS_ALT_HIGH)) != 0) {
+	if ((flags & GPIO_DS_ALT) != 0) {
 		return -ENOTSUP;
 	}
 
@@ -648,7 +648,7 @@ static const struct gpio_driver_api pcal6408a_drv_api = {
 		.dev = DEVICE_DT_INST_GET(idx),				   \
 	};								   \
 	DEVICE_DT_INST_DEFINE(idx, pcal6408a_init,			   \
-			      device_pm_control_nop,			   \
+			      NULL,					   \
 			      &pcal6408a_data##idx, &pcal6408a_cfg##idx,   \
 			      POST_KERNEL,				   \
 			      CONFIG_GPIO_PCAL6408A_INIT_PRIORITY,	   \

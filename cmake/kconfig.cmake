@@ -5,9 +5,11 @@
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig/include/generated)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig/include/config)
 
-# Support multiple SOC_ROOT
+# Support multiple SOC_ROOT, remove ZEPHYR_BASE as that is always sourced.
+set(kconfig_soc_root ${SOC_ROOT})
+list(REMOVE_ITEM kconfig_soc_root ${ZEPHYR_BASE})
 set(OPERATION WRITE)
-foreach(root ${SOC_ROOT})
+foreach(root ${kconfig_soc_root})
   file(${OPERATION} ${KCONFIG_BINARY_DIR}/Kconfig.soc.defconfig
        "osource \"${root}/soc/$(ARCH)/*/Kconfig.defconfig\"\n"
   )
@@ -21,9 +23,11 @@ foreach(root ${SOC_ROOT})
   set(OPERATION APPEND)
 endforeach()
 
-# Support multiple shields in BOARD_ROOT
+# Support multiple shields in BOARD_ROOT, remove ZEPHYR_BASE as that is always sourced.
+set(kconfig_board_root ${BOARD_ROOT})
+list(REMOVE_ITEM kconfig_board_root ${ZEPHYR_BASE})
 set(OPERATION WRITE)
-foreach(root ${BOARD_ROOT})
+foreach(root ${kconfig_board_root})
   file(${OPERATION} ${KCONFIG_BINARY_DIR}/Kconfig.shield.defconfig
        "osource \"${root}/boards/shields/*/Kconfig.defconfig\"\n"
   )
@@ -99,6 +103,7 @@ set(COMMON_KCONFIG_ENV_SETTINGS
   BOARD_DIR=${BOARD_DIR}
   KCONFIG_BINARY_DIR=${KCONFIG_BINARY_DIR}
   TOOLCHAIN_KCONFIG_DIR=${TOOLCHAIN_KCONFIG_DIR}
+  TOOLCHAIN_HAS_NEWLIB=$<IF:$<BOOL:${TOOLCHAIN_HAS_NEWLIB}>,y,n>
   EDT_PICKLE=${EDT_PICKLE}
   # Export all Zephyr modules to Kconfig
   ${ZEPHYR_KCONFIG_MODULES_DIR}
@@ -194,13 +199,14 @@ foreach(f ${merge_config_files})
   if(IS_ABSOLUTE ${f})
     set(path ${f})
   else()
-    set(path ${APPLICATION_SOURCE_DIR}/${f})
+    set(path ${APPLICATION_CONFIG_DIR}/${f})
   endif()
 
   list(APPEND merge_config_files_with_absolute_paths ${path})
 endforeach()
+set(merge_config_files ${merge_config_files_with_absolute_paths})
 
-foreach(f ${merge_config_files_with_absolute_paths})
+foreach(f ${merge_config_files})
   if(NOT EXISTS ${f} OR IS_DIRECTORY ${f})
     message(FATAL_ERROR "File not found: ${f}")
   endif()
@@ -209,7 +215,7 @@ endforeach()
 # Calculate a checksum of merge_config_files to determine if we need
 # to re-generate .config
 set(merge_config_files_checksum "")
-foreach(f ${merge_config_files_with_absolute_paths})
+foreach(f ${merge_config_files})
   file(MD5 ${f} checksum)
   set(merge_config_files_checksum "${merge_config_files_checksum}${checksum}")
 endforeach()

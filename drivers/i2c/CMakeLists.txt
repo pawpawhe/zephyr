@@ -5,6 +5,7 @@ zephyr_library()
 zephyr_library_sources(i2c_common.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_SHELL		i2c_shell.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_BITBANG		i2c_bitbang.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_TELINK_B91		i2c_b91.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_CC13XX_CC26XX		i2c_cc13xx_cc26xx.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_CC32XX		i2c_cc32xx.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_ESP32		i2c_esp32.c)
@@ -31,6 +32,10 @@ zephyr_library_sources_ifdef(CONFIG_I2C_SAM0		i2c_sam0.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_LITEX		i2c_litex.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_NPCX		i2c_npcx_controller.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_NPCX		i2c_npcx_port.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_DW		i2c_dw.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_RCAR		i2c_rcar.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_TCA9546A	i2c_tca9546a.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_XEC_V2		i2c_mchp_xec_v2.c)
 
 zephyr_library_sources_ifdef(CONFIG_I2C_STM32_V1
 	i2c_ll_stm32_v1.c
@@ -40,19 +45,6 @@ zephyr_library_sources_ifdef(CONFIG_I2C_STM32_V2
 	i2c_ll_stm32_v2.c
 	i2c_ll_stm32.c
 	)
-
-if(CONFIG_I2C_DW)
-  zephyr_library_sources(i2c_dw.c)
-  math(EXPR max_index "${CONFIG_I2C_DW_MAX_INSTANCES} - 1")
-  foreach(NUM RANGE 0 ${max_index})
-    math(EXPR NEXT_NUM "${NUM} + 1")
-    configure_file(
-      i2c_dw_port_x.h
-      ${PROJECT_BINARY_DIR}/include/generated/i2c_dw_port_${NUM}.h
-      @ONLY
-      )
-  endforeach(NUM)
-endif()
 
 zephyr_library_sources_ifdef(CONFIG_I2C_TEST		i2c_test.c)
 

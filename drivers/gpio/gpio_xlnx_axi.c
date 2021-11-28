@@ -283,11 +283,11 @@ static const struct gpio_driver_api gpio_xlnx_axi_driver_api = {
 									\
 	DEVICE_DT_DEFINE(DT_CHILD(DT_DRV_INST(n), gpio2),		\
 			&gpio_xlnx_axi_init,				\
-			device_pm_control_nop,				\
+			NULL,						\
 			&gpio_xlnx_axi_##n##_2_data,			\
 			&gpio_xlnx_axi_##n##_2_config,			\
 			POST_KERNEL,					\
-			CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,		\
+			CONFIG_GPIO_INIT_PRIORITY,			\
 			&gpio_xlnx_axi_driver_api);
 
 #define GPIO_XLNX_AXI_INIT(n)						\
@@ -311,11 +311,11 @@ static const struct gpio_driver_api gpio_xlnx_axi_driver_api = {
 									\
 	DEVICE_DT_INST_DEFINE(n,					\
 			&gpio_xlnx_axi_init,				\
-			device_pm_control_nop,				\
+			NULL,						\
 			&gpio_xlnx_axi_##n##_data,			\
 			&gpio_xlnx_axi_##n##_config,			\
 			POST_KERNEL,					\
-			CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,		\
+			CONFIG_GPIO_INIT_PRIORITY,			\
 			&gpio_xlnx_axi_driver_api);			\
 	GPIO_XLNX_AXI_GPIO2_COND_INIT(n);
 

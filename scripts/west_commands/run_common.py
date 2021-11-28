@@ -272,9 +272,8 @@ def load_cmake_cache(build_dir, args):
 
 def rebuild(command, build_dir, args):
     _banner(f'west {command.name}: rebuilding')
-    extra_args = ['--target', 'west_' + command.name + '_depends']
     try:
-        zcmake.run_build(build_dir, extra_args=extra_args)
+        zcmake.run_build(build_dir)
     except CalledProcessError:
         if args.build_dir:
             log.die(f're-build in {args.build_dir} failed')
@@ -357,8 +356,8 @@ def get_runner_config(build_dir, yaml_path, runners_yaml, args=None):
 
         return None
 
-    def config(attr):
-        return getattr(args, attr, None) or yaml_config.get(attr)
+    def config(attr, default=None):
+        return getattr(args, attr, None) or yaml_config.get(attr, default)
 
     return RunnerConfig(build_dir,
                         yaml_config['board_dir'],
@@ -367,7 +366,7 @@ def get_runner_config(build_dir, yaml_path, runners_yaml, args=None):
                         output_file('bin'),
                         config('gdb'),
                         config('openocd'),
-                        config('openocd_search'))
+                        config('openocd_search', []))
 
 def dump_traceback():
     # Save the current exception to a file and return its path.

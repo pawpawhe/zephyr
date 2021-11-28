@@ -95,7 +95,7 @@ static const struct dac_driver_api api_sam0_driver_api = {
 
 #define SAM0_DAC_REFSEL(n)						       \
 	COND_CODE_1(DT_INST_NODE_HAS_PROP(n, reference),		       \
-		    (DT_ENUM_IDX(DT_DRV_INST(n), reference)), (0))
+		    (DT_INST_ENUM_IDX(n, reference)), (0))
 
 #define SAM0_DAC_INIT(n)						       \
 	static const struct dac_sam0_cfg dac_sam0_cfg_##n = {		       \
@@ -106,9 +106,9 @@ static const struct dac_driver_api api_sam0_driver_api = {
 		.refsel = UTIL_CAT(SAM0_DAC_REFSEL_, SAM0_DAC_REFSEL(n)),      \
 	};								       \
 									       \
-	DEVICE_DT_INST_DEFINE(n, &dac_sam0_init, device_pm_control_nop, NULL,  \
+	DEVICE_DT_INST_DEFINE(n, &dac_sam0_init, NULL, NULL,		       \
 			    &dac_sam0_cfg_##n, POST_KERNEL,		       \
-			    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,	       \
+			    CONFIG_DAC_INIT_PRIORITY,			       \
 			    &api_sam0_driver_api)
 
 DT_INST_FOREACH_STATUS_OKAY(SAM0_DAC_INIT);

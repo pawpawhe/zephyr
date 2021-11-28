@@ -50,6 +50,9 @@ set_compiler_property(PROPERTY cstd)
 set_compiler_property(PROPERTY nostdinc)
 set_compiler_property(PROPERTY nostdinc_include)
 
+# Compiler flags for disabling C++ standard include.
+set_compiler_property(TARGET compiler-cpp PROPERTY nostdincxx)
+
 # Required C++ flags when compiling C++ code
 set_property(TARGET compiler-cpp PROPERTY required)
 
@@ -59,6 +62,8 @@ set_property(TARGET compiler-cpp PROPERTY dialect_cpp11)
 set_property(TARGET compiler-cpp PROPERTY dialect_cpp14)
 set_property(TARGET compiler-cpp PROPERTY dialect_cpp17)
 set_property(TARGET compiler-cpp PROPERTY dialect_cpp2a)
+set_property(TARGET compiler-cpp PROPERTY dialect_cpp20)
+set_property(TARGET compiler-cpp PROPERTY dialect_cpp2b)
 
 # Flag for disabling exeptions in C++
 set_property(TARGET compiler-cpp PROPERTY no_exceptions)
@@ -97,6 +102,9 @@ set_compiler_property(PROPERTY imacros)
 set_compiler_property(PROPERTY sanitize_address)
 
 set_compiler_property(PROPERTY sanitize_undefined)
+
+# Compiler flag for turning off thread-safe initialization of local statics
+set_property(TARGET compiler-cpp PROPERTY no_threadsafe_statics)
 
 # Required ASM flags when compiling
 set_property(TARGET asm PROPERTY required)

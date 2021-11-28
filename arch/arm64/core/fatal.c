@@ -226,6 +226,8 @@ void z_arm64_fatal_error(unsigned int reason, z_arch_esf_t *esf)
 
 			if (dump_far)
 				LOG_ERR("FAR_ELn: 0x%016llx", far);
+
+			LOG_ERR("TPIDRRO: 0x%016llx", read_tpidrro_el0());
 #endif /* CONFIG_EXCEPTION_DEBUG */
 
 			if (is_recoverable(esf, esr, far, elr))
@@ -272,9 +274,7 @@ void z_arm64_do_kernel_oops(z_arch_esf_t *esf)
 #ifdef CONFIG_USERSPACE
 FUNC_NORETURN void arch_syscall_oops(void *ssf_ptr)
 {
-	ARG_UNUSED(ssf_ptr);
-
-	z_arm64_fatal_error(K_ERR_KERNEL_OOPS, NULL);
+	z_arm64_fatal_error(K_ERR_KERNEL_OOPS, ssf_ptr);
 	CODE_UNREACHABLE;
 }
 #endif

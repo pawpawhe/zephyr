@@ -42,10 +42,10 @@ NET_PKT_SLAB_DEFINE(capture_pkts, CONFIG_NET_CAPTURE_PKT_COUNT);
 
 #if defined(CONFIG_NET_BUF_FIXED_DATA_SIZE)
 NET_BUF_POOL_FIXED_DEFINE(capture_bufs, CONFIG_NET_CAPTURE_BUF_COUNT,
-			  CONFIG_NET_BUF_DATA_SIZE, NULL);
+			  CONFIG_NET_BUF_DATA_SIZE, 4, NULL);
 #else
 NET_BUF_POOL_VAR_DEFINE(capture_bufs, CONFIG_NET_CAPTURE_BUF_COUNT,
-			CONFIG_NET_BUF_DATA_POOL_SIZE, NULL);
+			CONFIG_NET_BUF_DATA_POOL_SIZE, 4, NULL);
 #endif
 
 static sys_slist_t net_capture_devlist;
@@ -700,7 +700,7 @@ static const struct net_capture_interface_api capture_interface_api = {
 	DEVICE_DEFINE(net_capture_##x,					\
 		      "NET_CAPTURE" #x,					\
 		      &capture_dev_init,				\
-		      device_pm_control_nop,				\
+		      NULL,						\
 		      &capture_dev_data_##x,				\
 		      NULL,						\
 		      POST_KERNEL,					\

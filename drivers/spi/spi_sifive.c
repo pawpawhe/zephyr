@@ -32,6 +32,10 @@ int spi_config(const struct device *dev, uint32_t frequency,
 	uint32_t div;
 	uint32_t fmt_len;
 
+	if (operation & SPI_HALF_DUPLEX) {
+		return -ENOTSUP;
+	}
+
 	if (SPI_OP_MODE_GET(operation) != SPI_OP_MODE_MASTER) {
 		return -ENOTSUP;
 	}
@@ -76,7 +80,8 @@ int spi_config(const struct device *dev, uint32_t frequency,
 	fmt_len &= SF_FMT_LEN_MASK;
 	sys_set_mask(SPI_REG(dev, REG_FMT), SF_FMT_LEN_MASK, fmt_len);
 
-	if ((operation & SPI_LINES_MASK) != SPI_LINES_SINGLE) {
+	if (IS_ENABLED(CONFIG_SPI_EXTENDED_MODES) &&
+	    (operation & SPI_LINES_MASK) != SPI_LINES_SINGLE) {
 		return -ENOTSUP;
 	}
 	/* Set single line operation */
@@ -115,27 +120,29 @@ uint16_t spi_sifive_recv(const struct device *dev)
 void spi_sifive_xfer(const struct device *dev, const bool hw_cs_control)
 {
 	struct spi_context *ctx = &SPI_DATA(dev)->ctx;
+	uint16_t txd, rxd;
 
-	uint32_t send_len = spi_context_longest_current_buf(ctx);
-
-	for (uint32_t i = 0; i < send_len; i++) {
-
+	do {
 		/* Send a frame */
-		if (i < ctx->tx_len) {
-			spi_sifive_send(dev, (uint16_t) (ctx->tx_buf)[i]);
+		if (spi_context_tx_buf_on(ctx)) {
+			txd = *ctx->tx_buf;
 		} else {
-			/* Send dummy bytes */
-			spi_sifive_send(dev, 0);
+			txd = 0U;
 		}
+
+		spi_sifive_send(dev, txd);
+
+		spi_context_update_tx(ctx, 1, 1);
 
 		/* Receive a frame */
-		if (i < ctx->rx_len) {
-			ctx->rx_buf[i] = (uint8_t) spi_sifive_recv(dev);
-		} else {
-			/* Discard returned value */
-			spi_sifive_recv(dev);
+		rxd = spi_sifive_recv(dev);
+
+		if (spi_context_rx_buf_on(ctx)) {
+			*ctx->rx_buf = rxd;
 		}
-	}
+
+		spi_context_update_rx(ctx, 1, 1);
+	} while (spi_context_tx_on(ctx) || spi_context_rx_on(ctx));
 
 	/* Deassert the CS line */
 	if (!hw_cs_control) {
@@ -151,8 +158,14 @@ void spi_sifive_xfer(const struct device *dev, const bool hw_cs_control)
 
 int spi_sifive_init(const struct device *dev)
 {
+	int err;
 	/* Disable SPI Flash mode */
 	sys_clear_bit(SPI_REG(dev, REG_FCTRL), SF_FCTRL_EN);
+
+	err = spi_context_cs_configure_all(&SPI_DATA(dev)->ctx);
+	if (err < 0) {
+		return err;
+	}
 
 	/* Make sure the context is unlocked */
 	spi_context_unlock_unconditionally(&SPI_DATA(dev)->ctx);
@@ -186,7 +199,6 @@ int spi_sifive_transceive(const struct device *dev,
 		 * If the user has requested manual GPIO control, ask the
 		 * context for control and disable HW control
 		 */
-		spi_context_cs_configure(&SPI_DATA(dev)->ctx);
 		sys_write32(SF_CSMODE_OFF, SPI_REG(dev, REG_CSMODE));
 	} else {
 		/*
@@ -243,6 +255,7 @@ static struct spi_driver_api spi_sifive_api = {
 	static struct spi_sifive_data spi_sifive_data_##n = { \
 		SPI_CONTEXT_INIT_LOCK(spi_sifive_data_##n, ctx), \
 		SPI_CONTEXT_INIT_SYNC(spi_sifive_data_##n, ctx), \
+		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(n), ctx)	\
 	}; \
 	static struct spi_sifive_cfg spi_sifive_cfg_##n = { \
 		.base = DT_INST_REG_ADDR_BY_NAME(n, control), \
@@ -250,7 +263,7 @@ static struct spi_driver_api spi_sifive_api = {
 	}; \
 	DEVICE_DT_INST_DEFINE(n, \
 			spi_sifive_init, \
-			device_pm_control_nop, \
+			NULL, \
 			&spi_sifive_data_##n, \
 			&spi_sifive_cfg_##n, \
 			POST_KERNEL, \

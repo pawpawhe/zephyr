@@ -24,16 +24,22 @@ struct lll_scan {
 	uint8_t  filter_policy:2;
 	uint8_t  type:1;
 	uint8_t  init_addr_type:1;
-#if defined(CONFIG_BT_CENTRAL)
-	uint8_t  adv_addr_type:1;
-#endif /* CONFIG_BT_CENTRAL */
+	uint8_t  is_stop:1;
 
 #if defined(CONFIG_BT_CTLR_ADV_EXT)
 	uint16_t duration_reload;
 	uint16_t duration_expire;
 	uint8_t  phy:3;
 	uint8_t  is_adv_ind:1;
+	uint8_t  is_aux_sched:1;
+
+	/* temporary storage when aux scan was scheduled from LLL */
+	struct lll_scan_aux *lll_aux;
 #endif /* CONFIG_BT_CTLR_ADV_EXT */
+
+#if defined(CONFIG_BT_CENTRAL)
+	uint8_t  adv_addr_type:1;
+#endif /* CONFIG_BT_CENTRAL */
 
 #if defined(CONFIG_BT_CTLR_PRIVACY)
 	uint8_t  rpa_gen:1;
@@ -55,6 +61,8 @@ struct lll_scan_aux {
 	struct lll_hdr hdr;
 
 	uint8_t chan:6;
+	uint8_t state:1;
+	uint8_t is_chain_sched:1;
 
 	uint8_t phy:3;
 
@@ -63,7 +71,18 @@ struct lll_scan_aux {
 #if defined(CONFIG_BT_CTLR_TX_PWR_DYNAMIC_CONTROL)
 	int8_t tx_pwr_lvl;
 #endif /* CONFIG_BT_CTLR_TX_PWR_DYNAMIC_CONTROL */
+
+#if defined(CONFIG_BT_CENTRAL)
+	struct node_rx_pdu *node_conn_rx;
+#endif /* CONFIG_BT_CENTRAL */
 };
+
+
+/* Define to check if filter is enabled and in addition if it is Extended Scan
+ * Filtering.
+ */
+#define SCAN_FP_FILTER BIT(0)
+#define SCAN_FP_EXT    BIT(1)
 
 int lll_scan_init(void);
 int lll_scan_reset(void);

@@ -396,15 +396,18 @@ struct net_if_config {
  *
  * Traffic classes are used when sending or receiving data that is classified
  * with different priorities. So some traffic can be marked as high priority
- * and it will be sent or received first. There is always at least one work
- * queue in the system for Rx and Tx. Each network packet that is transmitted
- * or received goes through a work queue thread that will transmit it.
+ * and it will be sent or received first. Each network packet that is
+ * transmitted or received goes through a fifo to a thread that will transmit
+ * it.
  */
 struct net_traffic_class {
-	/** Work queue for handling this Tx or Rx packet */
-	struct k_work_q work_q;
+	/** Fifo for handling this Tx or Rx packet */
+	struct k_fifo fifo;
 
-	/** Stack for this work queue */
+	/** Traffic class handler thread */
+	struct k_thread handler;
+
+	/** Stack for this handler */
 	k_thread_stack_t *stack;
 };
 
@@ -538,7 +541,9 @@ static inline void net_if_flag_clear(struct net_if *iface,
 static inline bool net_if_flag_is_set(struct net_if *iface,
 				      enum net_if_flag value)
 {
-	NET_ASSERT(iface);
+	if (iface == NULL) {
+		return false;
+	}
 
 	return atomic_test_bit(iface->if_dev->flags, value);
 }
@@ -780,6 +785,10 @@ static inline int net_if_set_link_addr(struct net_if *iface,
  */
 static inline uint16_t net_if_get_mtu(struct net_if *iface)
 {
+	if (iface == NULL) {
+		return 0U;
+	}
+
 	return iface->if_dev->mtu;
 }
 
@@ -792,6 +801,10 @@ static inline uint16_t net_if_get_mtu(struct net_if *iface)
 static inline void net_if_set_mtu(struct net_if *iface,
 				  uint16_t mtu)
 {
+	if (iface == NULL) {
+		return;
+	}
+
 	iface->if_dev->mtu = mtu;
 }
 
@@ -1030,11 +1043,11 @@ struct net_if_mcast_addr *net_if_ipv6_maddr_lookup(const struct in6_addr *addr,
 
  * @param iface A pointer to a struct net_if to which the multicast address is
  *        attached.
- * @param addr IPv6 multicast address.
+ * @param addr IP multicast address.
  * @param is_joined True if the address is joined, false if left.
  */
 typedef void (*net_if_mcast_callback_t)(struct net_if *iface,
-					const struct in6_addr *addr,
+					const struct net_addr *addr,
 					bool is_joined);
 
 /**
@@ -1082,7 +1095,7 @@ void net_if_mcast_mon_unregister(struct net_if_mcast_monitor *mon);
  * @param addr Multicast address
  * @param is_joined Is this multicast address joined (true) or not (false)
  */
-void net_if_mcast_monitor(struct net_if *iface, const struct in6_addr *addr,
+void net_if_mcast_monitor(struct net_if *iface, const struct net_addr *addr,
 			  bool is_joined);
 
 /**
@@ -1636,6 +1649,34 @@ struct net_if_mcast_addr *net_if_ipv4_maddr_lookup(const struct in_addr *addr,
 						   struct net_if **iface);
 
 /**
+ * @brief Mark a given multicast address to be joined.
+ *
+ * @param addr IPv4 multicast address
+ */
+void net_if_ipv4_maddr_join(struct net_if_mcast_addr *addr);
+
+/**
+ * @brief Check if given multicast address is joined or not.
+ *
+ * @param addr IPv4 multicast address
+ *
+ * @return True if address is joined, False otherwise.
+ */
+static inline bool net_if_ipv4_maddr_is_joined(struct net_if_mcast_addr *addr)
+{
+	NET_ASSERT(addr);
+
+	return addr->is_joined;
+}
+
+/**
+ * @brief Mark a given multicast address to be left.
+ *
+ * @param addr IPv4 multicast address
+ */
+void net_if_ipv4_maddr_leave(struct net_if_mcast_addr *addr);
+
+/**
  * @brief Get the IPv4 address of the given router
  * @param router a network router
  *
@@ -2169,7 +2210,7 @@ struct net_if_api {
 	((struct net_if *)&NET_IF_GET_NAME(dev_name, sfx))
 
 #define NET_IF_INIT(dev_name, sfx, _l2, _mtu, _num_configs)		\
-	static Z_STRUCT_SECTION_ITERABLE(net_if_dev,			\
+	static STRUCT_SECTION_ITERABLE(net_if_dev,			\
 				NET_IF_DEV_GET_NAME(dev_name, sfx)) = { \
 		.dev = &(DEVICE_NAME_GET(dev_name)),			\
 		.l2 = &(NET_L2_GET_NAME(_l2)),				\
@@ -2178,7 +2219,8 @@ struct net_if_api {
 	};								\
 	static Z_DECL_ALIGN(struct net_if)				\
 		       NET_IF_GET_NAME(dev_name, sfx)[_num_configs]	\
-		       __used __in_section(_net_if, static, net_if) = {	\
+		       __used __in_section(_net_if, static,             \
+					   dev_name) = {                \
 		[0 ... (_num_configs - 1)] = {				\
 			.if_dev = &(NET_IF_DEV_GET_NAME(dev_name, sfx)), \
 			NET_IF_CONFIG_INIT				\
@@ -2186,14 +2228,15 @@ struct net_if_api {
 	}
 
 #define NET_IF_OFFLOAD_INIT(dev_name, sfx, _mtu)			\
-	static Z_STRUCT_SECTION_ITERABLE(net_if_dev,			\
+	static STRUCT_SECTION_ITERABLE(net_if_dev,			\
 				NET_IF_DEV_GET_NAME(dev_name, sfx)) = {	\
 		.dev = &(DEVICE_NAME_GET(dev_name)),			\
 		.mtu = _mtu,						\
 	};								\
 	static Z_DECL_ALIGN(struct net_if)				\
 		NET_IF_GET_NAME(dev_name, sfx)[NET_IF_MAX_CONFIGS]	\
-		       __used __in_section(_net_if, static, net_if) = {	\
+		       __used __in_section(_net_if, static,             \
+					   dev_name) = {                \
 		[0 ... (NET_IF_MAX_CONFIGS - 1)] = {			\
 			.if_dev = &(NET_IF_DEV_GET_NAME(dev_name, sfx)), \
 			NET_IF_CONFIG_INIT				\
@@ -2205,10 +2248,10 @@ struct net_if_api {
 /* Network device initialization macros */
 
 #define Z_NET_DEVICE_INIT(node_id, dev_name, drv_name, init_fn,		\
-			pm_control_fn, data, cfg, prio, api, l2,	\
+			pm_action_cb, data, cfg, prio, api, l2,	\
 			l2_ctx_type, mtu)				\
 	Z_DEVICE_DEFINE(node_id, dev_name, drv_name, init_fn,		\
-			pm_control_fn, data,				\
+			pm_action_cb, data,				\
 			cfg, POST_KERNEL, prio, api);			\
 	NET_L2_DATA_INIT(dev_name, 0, l2_ctx_type);			\
 	NET_IF_INIT(dev_name, 0, l2, mtu, NET_IF_MAX_CONFIGS)
@@ -2222,8 +2265,8 @@ struct net_if_api {
  * @param drv_name The name this instance of the driver exposes to
  * the system.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -2234,11 +2277,11 @@ struct net_if_api {
  * @param l2_ctx_type Type of L2 context data.
  * @param mtu Maximum transfer unit in bytes for this network interface.
  */
-#define NET_DEVICE_INIT(dev_name, drv_name, init_fn, pm_control_fn,	\
+#define NET_DEVICE_INIT(dev_name, drv_name, init_fn, pm_action_cb,	\
 			data, cfg, prio, api, l2,			\
 			l2_ctx_type, mtu)				\
 	Z_NET_DEVICE_INIT(DT_INVALID_NODE, dev_name, drv_name, init_fn,	\
-			pm_control_fn, data, cfg, prio, api, l2,	\
+			pm_action_cb, data, cfg, prio, api, l2,	\
 			l2_ctx_type, mtu)
 
 /**
@@ -2249,8 +2292,8 @@ struct net_if_api {
  *
  * @param node_id The devicetree node identifier.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -2261,11 +2304,11 @@ struct net_if_api {
  * @param l2_ctx_type Type of L2 context data.
  * @param mtu Maximum transfer unit in bytes for this network interface.
  */
-#define NET_DEVICE_DT_DEFINE(node_id, init_fn, pm_control_fn, data, cfg,	\
+#define NET_DEVICE_DT_DEFINE(node_id, init_fn, pm_action_cb, data, cfg,	\
 			   prio, api, l2, l2_ctx_type, mtu)		\
 	Z_NET_DEVICE_INIT(node_id, Z_DEVICE_DT_DEV_NAME(node_id),	\
 			  DT_PROP_OR(node_id, label, ""), init_fn,	\
-			  pm_control_fn, data, cfg, prio, api, l2,	\
+			  pm_action_cb, data, cfg, prio, api, l2,	\
 			  l2_ctx_type, mtu)
 
 /**
@@ -2282,11 +2325,11 @@ struct net_if_api {
 	NET_DEVICE_DT_DEFINE(DT_DRV_INST(inst), __VA_ARGS__)
 
 #define Z_NET_DEVICE_INIT_INSTANCE(node_id, dev_name, drv_name,		\
-				   instance, init_fn, pm_control_fn,	\
+				   instance, init_fn, pm_action_cb,	\
 				   data, cfg, prio, api, l2,		\
 				   l2_ctx_type, mtu)			\
 	Z_DEVICE_DEFINE(node_id, dev_name, drv_name, init_fn,		\
-			pm_control_fn, data, cfg, POST_KERNEL,		\
+			pm_action_cb, data, cfg, POST_KERNEL,		\
 			prio, api);					\
 	NET_L2_DATA_INIT(dev_name, instance, l2_ctx_type);		\
 	NET_IF_INIT(dev_name, instance, l2, mtu, NET_IF_MAX_CONFIGS)
@@ -2304,8 +2347,8 @@ struct net_if_api {
  * the system.
  * @param instance Instance identifier.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -2317,10 +2360,10 @@ struct net_if_api {
  * @param mtu Maximum transfer unit in bytes for this network interface.
  */
 #define NET_DEVICE_INIT_INSTANCE(dev_name, drv_name, instance, init_fn,	\
-				 pm_control_fn, data, cfg, prio,	\
+				 pm_action_cb, data, cfg, prio,	\
 				 api, l2, l2_ctx_type, mtu)		\
 	Z_NET_DEVICE_INIT_INSTANCE(DT_INVALID_NODE, dev_name, drv_name,	\
-				   instance, init_fn, pm_control_fn,	\
+				   instance, init_fn, pm_action_cb,	\
 				   data, cfg, prio, api, l2,		\
 				   l2_ctx_type, mtu)
 
@@ -2336,8 +2379,8 @@ struct net_if_api {
  * @param node_id The devicetree node identifier.
  * @param instance Instance identifier.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -2348,13 +2391,14 @@ struct net_if_api {
  * @param l2_ctx_type Type of L2 context data.
  * @param mtu Maximum transfer unit in bytes for this network interface.
  */
-#define NET_DEVICE_DT_DEFINE_INSTANCE(node_id, instance, init_fn,		\
-				    pm_control_fn, data, cfg, prio,	\
-				    api, l2, l2_ctx_type, mtu)		\
-	Z_NET_DEVICE_INIT_INSTANCE(node_id, node_id, DT_LABEL(node_id),	\
-				   instance, init_fn, pm_control_fn,	\
-				   data, cfg, prio, api, l2,		\
-				   l2_ctx_type, mtu)
+#define NET_DEVICE_DT_DEFINE_INSTANCE(node_id, instance, init_fn,	\
+				      pm_action_cb, data, cfg, prio,	\
+				      api, l2, l2_ctx_type, mtu)	\
+	Z_NET_DEVICE_INIT_INSTANCE(node_id,				\
+				   Z_DEVICE_DT_DEV_NAME(node_id),	\
+				   DT_LABEL(node_id), instance,		\
+				   pm_action_cb, data, cfg, prio, api,	\
+				   l2, l2_ctx_type, mtu)
 
 /**
  * @def NET_DEVICE_DT_INST_DEFINE_INSTANCE
@@ -2371,10 +2415,10 @@ struct net_if_api {
 	NET_DEVICE_DT_DEFINE_INSTANCE(DT_DRV_INST(inst), __VA_ARGS__)
 
 #define Z_NET_DEVICE_OFFLOAD_INIT(node_id, dev_name, drv_name, init_fn,	\
-				  pm_control_fn, data, cfg, prio,	\
+				  pm_action_cb, data, cfg, prio,	\
 				  api, mtu)				\
 	Z_DEVICE_DEFINE(node_id, dev_name, drv_name, init_fn,		\
-			pm_control_fn, data, cfg, POST_KERNEL, prio, api);\
+			pm_action_cb, data, cfg, POST_KERNEL, prio, api);\
 	NET_IF_OFFLOAD_INIT(dev_name, 0, mtu)
 
 /**
@@ -2388,8 +2432,8 @@ struct net_if_api {
  * @param drv_name The name this instance of the driver exposes to
  * the system.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -2399,9 +2443,9 @@ struct net_if_api {
  * @param mtu Maximum transfer unit in bytes for this network interface.
  */
 #define NET_DEVICE_OFFLOAD_INIT(dev_name, drv_name, init_fn,		\
-				pm_control_fn, data, cfg, prio, api, mtu)\
+				pm_action_cb, data, cfg, prio, api, mtu)\
 	Z_NET_DEVICE_OFFLOAD_INIT(DT_INVALID_NODE, dev_name, drv_name,	\
-				init_fn, pm_control_fn, data, cfg, prio,\
+				init_fn, pm_action_cb, data, cfg, prio,\
 				api, mtu)
 
 /**
@@ -2414,8 +2458,8 @@ struct net_if_api {
  *
  * @param node_id The devicetree node identifier.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -2424,11 +2468,11 @@ struct net_if_api {
  * used by the driver. Can be NULL.
  * @param mtu Maximum transfer unit in bytes for this network interface.
  */
-#define NET_DEVICE_DT_OFFLOAD_DEFINE(node_id, init_fn, pm_control_fn,	\
+#define NET_DEVICE_DT_OFFLOAD_DEFINE(node_id, init_fn, pm_action_cb,	\
 				   data, cfg, prio, api, mtu)		\
 	Z_NET_DEVICE_OFFLOAD_INIT(node_id, Z_DEVICE_DT_DEV_NAME(node_id), \
 				  DT_PROP_OR(node_id, label, NULL),	\
-				  init_fn, pm_control_fn, data, cfg,	\
+				  init_fn, pm_action_cb, data, cfg,	\
 				  prio, api, mtu)
 
 /**

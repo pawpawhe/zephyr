@@ -650,9 +650,9 @@ static struct uart_stellaris_dev_data_t uart_stellaris_dev_data_0 = {
 
 DEVICE_DT_INST_DEFINE(0,
 		    &uart_stellaris_init,
-		    device_pm_control_nop,
+		    NULL,
 		    &uart_stellaris_dev_data_0, &uart_stellaris_dev_cfg_0,
-		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY,
 		    &uart_stellaris_driver_api);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
@@ -689,9 +689,9 @@ static struct uart_stellaris_dev_data_t uart_stellaris_dev_data_1 = {
 
 DEVICE_DT_INST_DEFINE(1,
 		    &uart_stellaris_init,
-		    device_pm_control_nop,
+		    NULL,
 		    &uart_stellaris_dev_data_1, &uart_stellaris_dev_cfg_1,
-		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY,
 		    &uart_stellaris_driver_api);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
@@ -728,9 +728,9 @@ static struct uart_stellaris_dev_data_t uart_stellaris_dev_data_2 = {
 
 DEVICE_DT_INST_DEFINE(2,
 		    &uart_stellaris_init,
-		    device_pm_control_nop,
+		    NULL,
 		    &uart_stellaris_dev_data_2, &uart_stellaris_dev_cfg_2,
-		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY,
 		    &uart_stellaris_driver_api);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN

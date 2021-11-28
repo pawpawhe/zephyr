@@ -17,17 +17,12 @@
  * running one and corrupting it. YMMV.
  */
 
-static chunkid_t max_chunkid(struct z_heap *h)
-{
-	return h->end_chunk - min_chunk_size(h);
-}
-
 #define VALIDATE(cond) do { if (!(cond)) { return false; } } while (0)
 
 static bool in_bounds(struct z_heap *h, chunkid_t c)
 {
 	VALIDATE(c >= right_chunk(h, 0));
-	VALIDATE(c <= max_chunkid(h));
+	VALIDATE(c < h->end_chunk);
 	VALIDATE(chunk_size(h, c) < h->end_chunk);
 	return true;
 }
@@ -72,6 +67,23 @@ static inline void check_nexts(struct z_heap *h, int bidx)
 	}
 }
 
+static void get_alloc_info(struct z_heap *h, size_t *alloc_bytes,
+			   size_t *free_bytes)
+{
+	chunkid_t c;
+
+	*alloc_bytes = 0;
+	*free_bytes = 0;
+
+	for (c = right_chunk(h, 0); c < h->end_chunk; c = right_chunk(h, c)) {
+		if (chunk_used(h, c)) {
+			*alloc_bytes += chunksz_to_bytes(h, chunk_size(h, c));
+		} else if (!solo_free_header(h, c)) {
+			*free_bytes += chunksz_to_bytes(h, chunk_size(h, c));
+		}
+	}
+}
+
 bool sys_heap_validate(struct sys_heap *heap)
 {
 	struct z_heap *h = heap->heap;
@@ -80,7 +92,7 @@ bool sys_heap_validate(struct sys_heap *heap)
 	/*
 	 * Walk through the chunks linearly, verifying sizes and end pointer.
 	 */
-	for (c = right_chunk(h, 0); c <= max_chunkid(h); c = right_chunk(h, c)) {
+	for (c = right_chunk(h, 0); c < h->end_chunk; c = right_chunk(h, c)) {
 		if (!valid_chunk(h, c)) {
 			return false;
 		}
@@ -88,6 +100,24 @@ bool sys_heap_validate(struct sys_heap *heap)
 	if (c != h->end_chunk) {
 		return false;  /* Should have exactly consumed the buffer */
 	}
+
+#ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
+	/*
+	 * Validate sys_heap_runtime_stats_get API.
+	 * Iterate all chunks in sys_heap to get total allocated bytes and
+	 * free bytes, then compare with the results of
+	 * sys_heap_runtime_stats_get function.
+	 */
+	size_t allocated_bytes, free_bytes;
+	struct sys_heap_runtime_stats stat;
+
+	get_alloc_info(h, &allocated_bytes, &free_bytes);
+	sys_heap_runtime_stats_get(heap, &stat);
+	if ((stat.allocated_bytes != allocated_bytes) ||
+	    (stat.free_bytes != free_bytes)) {
+		return false;
+	}
+#endif
 
 	/* Check the free lists: entry count should match, empty bit
 	 * should be correct, and all chunk entries should point into
@@ -126,7 +156,7 @@ bool sys_heap_validate(struct sys_heap *heap)
 	 * USED.
 	 */
 	chunkid_t prev_chunk = 0;
-	for (c = right_chunk(h, 0); c <= max_chunkid(h); c = right_chunk(h, c)) {
+	for (c = right_chunk(h, 0); c < h->end_chunk; c = right_chunk(h, c)) {
 		if (!chunk_used(h, c) && !solo_free_header(h, c)) {
 			return false;
 		}
@@ -164,7 +194,7 @@ bool sys_heap_validate(struct sys_heap *heap)
 	/* Now we are valid, but have managed to invert all the in-use
 	 * fields.  One more linear pass to fix them up
 	 */
-	for (c = right_chunk(h, 0); c <= max_chunkid(h); c = right_chunk(h, c)) {
+	for (c = right_chunk(h, 0); c < h->end_chunk; c = right_chunk(h, c)) {
 		set_chunk_used(h, c, !chunk_used(h, c));
 	}
 	return true;
@@ -207,33 +237,34 @@ static bool rand_alloc_choice(struct z_heap_stress_rec *sr)
 		return true;
 	} else if (sr->blocks_alloced >= sr->nblocks) {
 		return false;
+	} else {
+
+		/* The way this works is to scale the chance of choosing to
+		 * allocate vs. free such that it's even odds when the heap is
+		 * at the target percent, with linear tapering on the low
+		 * slope (i.e. we choose to always allocate with an empty
+		 * heap, allocate 50% of the time when the heap is exactly at
+		 * the target, and always free when above the target).  In
+		 * practice, the operations aren't quite symmetric (you can
+		 * always free, but your allocation might fail), and the units
+		 * aren't matched (we're doing math based on bytes allocated
+		 * and ignoring the overhead) but this is close enough.  And
+		 * yes, the math here is coarse (in units of percent), but
+		 * that's good enough and fits well inside 32 bit quantities.
+		 * (Note precision issue when heap size is above 40MB
+		 * though!).
+		 */
+		__ASSERT(sr->total_bytes < 0xffffffffU / 100, "too big for u32!");
+		uint32_t full_pct = (100 * sr->bytes_alloced) / sr->total_bytes;
+		uint32_t target = sr->target_percent ? sr->target_percent : 1;
+		uint32_t free_chance = 0xffffffffU;
+
+		if (full_pct < sr->target_percent) {
+			free_chance = full_pct * (0x80000000U / target);
+		}
+
+		return rand32() > free_chance;
 	}
-
-	/* The way this works is to scale the chance of choosing to
-	 * allocate vs. free such that it's even odds when the heap is
-	 * at the target percent, with linear tapering on the low
-	 * slope (i.e. we choose to always allocate with an empty
-	 * heap, allocate 50% of the time when the heap is exactly at
-	 * the target, and always free when above the target).  In
-	 * practice, the operations aren't quite symmetric (you can
-	 * always free, but your allocation might fail), and the units
-	 * aren't matched (we're doing math based on bytes allocated
-	 * and ignoring the overhead) but this is close enough.  And
-	 * yes, the math here is coarse (in units of percent), but
-	 * that's good enough and fits well inside 32 bit quantities.
-	 * (Note precision issue when heap size is above 40MB
-	 * though!).
-	 */
-	__ASSERT(sr->total_bytes < 0xffffffffU / 100, "too big for u32!");
-	uint32_t full_pct = (100 * sr->bytes_alloced) / sr->total_bytes;
-	uint32_t target = sr->target_percent ? sr->target_percent : 1;
-	uint32_t free_chance = 0xffffffffU;
-
-	if (full_pct < sr->target_percent) {
-		free_chance = full_pct * (0x80000000U / target);
-	}
-
-	return rand32() > free_chance;
 }
 
 /* Chooses a size of block to allocate, logarithmically favoring
@@ -349,20 +380,7 @@ void heap_print_info(struct z_heap *h, bool dump_chunks)
 
 	if (dump_chunks) {
 		printk("\nChunk dump:\n");
-	}
-	free_bytes = allocated_bytes = 0;
-	for (chunkid_t c = 0; ; c = right_chunk(h, c)) {
-		if (chunk_used(h, c)) {
-			if ((c != 0) && (c != h->end_chunk)) {
-				/* 1st and last are always allocated for internal purposes */
-				allocated_bytes += chunksz_to_bytes(h, chunk_size(h, c));
-			}
-		} else {
-			if (!solo_free_header(h, c)) {
-				free_bytes += chunksz_to_bytes(h, chunk_size(h, c));
-			}
-		}
-		if (dump_chunks) {
+		for (chunkid_t c = 0; ; c = right_chunk(h, c)) {
 			printk("chunk %4d: [%c] size=%-4d left=%-4d right=%d\n",
 			       c,
 			       chunk_used(h, c) ? '*'
@@ -371,12 +389,13 @@ void heap_print_info(struct z_heap *h, bool dump_chunks)
 			       chunk_size(h, c),
 			       left_chunk(h, c),
 			       right_chunk(h, c));
-		}
-		if (c == h->end_chunk) {
-			break;
+			if (c == h->end_chunk) {
+				break;
+			}
 		}
 	}
 
+	get_alloc_info(h, &allocated_bytes, &free_bytes);
 	/* The end marker chunk has a header. It is part of the overhead. */
 	total = h->end_chunk * CHUNK_UNIT + chunk_header_bytes(h);
 	overhead = total - free_bytes - allocated_bytes;
@@ -390,3 +409,20 @@ void sys_heap_print_info(struct sys_heap *heap, bool dump_chunks)
 {
 	heap_print_info(heap->heap, dump_chunks);
 }
+
+#ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
+
+int sys_heap_runtime_stats_get(struct sys_heap *heap,
+		struct sys_heap_runtime_stats *stats)
+{
+	if ((heap == NULL) || (stats == NULL)) {
+		return -EINVAL;
+	}
+
+	stats->free_bytes = heap->heap->free_bytes;
+	stats->allocated_bytes = heap->heap->allocated_bytes;
+
+	return 0;
+}
+
+#endif

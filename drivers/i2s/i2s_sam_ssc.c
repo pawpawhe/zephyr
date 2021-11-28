@@ -77,18 +77,19 @@ struct stream {
 	int32_t state;
 	struct k_sem sem;
 	uint32_t dma_channel;
-	struct dma_config dma_cfg;
+	uint8_t dma_perid;
+	uint8_t word_size_bytes;
+	bool last_block;
 	struct i2s_config cfg;
 	struct ring_buf mem_block_queue;
 	void *mem_block;
-	bool last_block;
 	int (*stream_start)(struct stream *, Ssc *const,
 			    const struct device *);
 	void (*stream_disable)(struct stream *, Ssc *const,
 			       const struct device *);
 	void (*queue_drop)(struct stream *);
 	int (*set_data_format)(const struct i2s_sam_dev_cfg *const,
-			       struct i2s_config *);
+			       const struct i2s_config *);
 };
 
 /* Device run time data */
@@ -165,6 +166,21 @@ static int queue_put(struct ring_buf *rb, void *mem_block, size_t size)
 	return 0;
 }
 
+static int reload_dma(const struct device *dev_dma, uint32_t channel,
+		      void *src, void *dst, size_t size)
+{
+	int ret;
+
+	ret = dma_reload(dev_dma, channel, (uint32_t)src, (uint32_t)dst, size);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = dma_start(dev_dma, channel);
+
+	return ret;
+}
+
 static int start_dma(const struct device *dev_dma, uint32_t channel,
 		     struct dma_config *cfg, void *src, void *dst,
 		     uint32_t blk_size)
@@ -235,11 +251,11 @@ static void dma_rx_callback(const struct device *dma_dev, void *user_data,
 		goto rx_disable;
 	}
 
-	ret = start_dma(dev_cfg->dev_dma, stream->dma_channel, &stream->dma_cfg,
-			(void *)&(ssc->SSC_RHR), stream->mem_block,
-			stream->cfg.block_size);
+	ret = reload_dma(dev_cfg->dev_dma, stream->dma_channel,
+			 (void *)&(ssc->SSC_RHR), stream->mem_block,
+			 stream->cfg.block_size);
 	if (ret < 0) {
-		LOG_DBG("Failed to start RX DMA transfer: %d", ret);
+		LOG_DBG("Failed to reload RX DMA transfer: %d", ret);
 		goto rx_disable;
 	}
 
@@ -296,11 +312,11 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 	/* Assure cache coherency before DMA read operation */
 	DCACHE_CLEAN(stream->mem_block, mem_block_size);
 
-	ret = start_dma(dev_cfg->dev_dma, stream->dma_channel, &stream->dma_cfg,
-			stream->mem_block, (void *)&(ssc->SSC_THR),
-			mem_block_size);
+	ret = reload_dma(dev_cfg->dev_dma, stream->dma_channel,
+			 stream->mem_block, (void *)&(ssc->SSC_THR),
+			 mem_block_size);
 	if (ret < 0) {
-		LOG_DBG("Failed to start TX DMA transfer: %d", ret);
+		LOG_DBG("Failed to reload TX DMA transfer: %d", ret);
 		goto tx_disable;
 	}
 
@@ -311,7 +327,7 @@ tx_disable:
 }
 
 static int set_rx_data_format(const struct i2s_sam_dev_cfg *const dev_cfg,
-			      struct i2s_config *i2s_cfg)
+			      const struct i2s_config *i2s_cfg)
 {
 	Ssc *const ssc = dev_cfg->regs;
 	const bool pin_rk_en = IS_ENABLED(CONFIG_I2S_SAM_SSC_0_PIN_RK_EN);
@@ -404,7 +420,7 @@ static int set_rx_data_format(const struct i2s_sam_dev_cfg *const dev_cfg,
 }
 
 static int set_tx_data_format(const struct i2s_sam_dev_cfg *const dev_cfg,
-			      struct i2s_config *i2s_cfg)
+			      const struct i2s_config *i2s_cfg)
 {
 	Ssc *const ssc = dev_cfg->regs;
 	uint8_t word_size_bits = i2s_cfg->word_size;
@@ -515,8 +531,8 @@ static int bit_clock_set(Ssc *const ssc, uint32_t bit_clk_freq)
 	return 0;
 }
 
-static struct i2s_config *i2s_sam_config_get(const struct device *dev,
-					     enum i2s_dir dir)
+static const struct i2s_config *i2s_sam_config_get(const struct device *dev,
+						   enum i2s_dir dir)
 {
 	struct i2s_sam_dev_data *const dev_data = DEV_DATA(dev);
 	struct stream *stream;
@@ -535,14 +551,13 @@ static struct i2s_config *i2s_sam_config_get(const struct device *dev,
 }
 
 static int i2s_sam_configure(const struct device *dev, enum i2s_dir dir,
-			     struct i2s_config *i2s_cfg)
+			     const struct i2s_config *i2s_cfg)
 {
 	const struct i2s_sam_dev_cfg *const dev_cfg = DEV_CFG(dev);
 	struct i2s_sam_dev_data *const dev_data = DEV_DATA(dev);
 	Ssc *const ssc = dev_cfg->regs;
 	uint8_t num_words = i2s_cfg->channels;
 	uint8_t word_size_bits = i2s_cfg->word_size;
-	uint8_t word_size_bytes;
 	uint32_t bit_clk_freq;
 	struct stream *stream;
 	int ret;
@@ -551,6 +566,8 @@ static int i2s_sam_configure(const struct device *dev, enum i2s_dir dir,
 		stream = &dev_data->rx;
 	} else if (dir == I2S_DIR_TX) {
 		stream = &dev_data->tx;
+	} else if (dir == I2S_DIR_BOTH) {
+		return -ENOSYS;
 	} else {
 		LOG_ERR("Either RX or TX direction must be selected");
 		return -EINVAL;
@@ -606,11 +623,8 @@ static int i2s_sam_configure(const struct device *dev, enum i2s_dir dir,
 		return ret;
 	}
 
-	word_size_bytes = get_word_size_bytes(word_size_bits);
-
 	/* Set up DMA channel parameters */
-	stream->dma_cfg.source_data_size = word_size_bytes;
-	stream->dma_cfg.dest_data_size = word_size_bytes;
+	stream->word_size_bytes = get_word_size_bytes(word_size_bits);
 
 	if (i2s_cfg->options & I2S_OPT_LOOPBACK) {
 		ssc->SSC_RFMR |= SSC_RFMR_LOOP;
@@ -638,7 +652,18 @@ static int rx_stream_start(struct stream *stream, Ssc *const ssc,
 	 */
 	(void)ssc->SSC_RHR;
 
-	ret = start_dma(dev_dma, stream->dma_channel, &stream->dma_cfg,
+	struct dma_config dma_cfg = {
+		.source_data_size = stream->word_size_bytes,
+		.dest_data_size = stream->word_size_bytes,
+		.block_count = 1,
+		.dma_slot = stream->dma_perid,
+		.channel_direction = PERIPHERAL_TO_MEMORY,
+		.source_burst_length = 1,
+		.dest_burst_length = 1,
+		.dma_callback = dma_rx_callback,
+	};
+
+	ret = start_dma(dev_dma, stream->dma_channel, &dma_cfg,
 			(void *)&(ssc->SSC_RHR), stream->mem_block,
 			stream->cfg.block_size);
 	if (ret < 0) {
@@ -676,10 +701,21 @@ static int tx_stream_start(struct stream *stream, Ssc *const ssc,
 	 */
 	ssc->SSC_THR = 0;
 
+	struct dma_config dma_cfg = {
+		.source_data_size = stream->word_size_bytes,
+		.dest_data_size = stream->word_size_bytes,
+		.block_count = 1,
+		.dma_slot = stream->dma_perid,
+		.channel_direction = MEMORY_TO_PERIPHERAL,
+		.source_burst_length = 1,
+		.dest_burst_length = 1,
+		.dma_callback = dma_tx_callback,
+	};
+
 	/* Assure cache coherency before DMA read operation */
 	DCACHE_CLEAN(stream->mem_block, mem_block_size);
 
-	ret = start_dma(dev_dma, stream->dma_channel, &stream->dma_cfg,
+	ret = start_dma(dev_dma, stream->dma_channel, &dma_cfg,
 			stream->mem_block, (void *)&(ssc->SSC_THR),
 			mem_block_size);
 	if (ret < 0) {
@@ -763,6 +799,8 @@ static int i2s_sam_trigger(const struct device *dev, enum i2s_dir dir,
 		stream = &dev_data->rx;
 	} else if (dir == I2S_DIR_TX) {
 		stream = &dev_data->tx;
+	} else if (dir == I2S_DIR_BOTH) {
+		return -ENOSYS;
 	} else {
 		LOG_ERR("Either RX or TX direction must be selected");
 		return -EINVAL;
@@ -972,7 +1010,7 @@ static void i2s0_sam_irq_config(void)
 		    DEVICE_DT_INST_GET(0), 0);
 }
 
-static const struct soc_gpio_pin i2s0_pins[] = ATMEL_SAM_DT_PINS(0);
+static const struct soc_gpio_pin i2s0_pins[] = ATMEL_SAM_DT_INST_PINS(0);
 
 static const struct i2s_sam_dev_cfg i2s0_sam_config = {
 	.dev_dma = DEVICE_DT_GET(DT_INST_DMAS_CTLR_BY_NAME(0, tx)),
@@ -990,14 +1028,7 @@ struct queue_item tx_0_ring_buf[CONFIG_I2S_SAM_SSC_TX_BLOCK_COUNT + 1];
 static struct i2s_sam_dev_data i2s0_sam_data = {
 	.rx = {
 		.dma_channel = DT_INST_DMAS_CELL_BY_NAME(0, rx, channel),
-		.dma_cfg = {
-			.block_count = 1,
-			.dma_slot = DT_INST_DMAS_CELL_BY_NAME(0, rx, perid),
-			.channel_direction = PERIPHERAL_TO_MEMORY,
-			.source_burst_length = 1,
-			.dest_burst_length = 1,
-			.dma_callback = dma_rx_callback,
-		},
+		.dma_perid = DT_INST_DMAS_CELL_BY_NAME(0, rx, perid),
 		.mem_block_queue.buf = rx_0_ring_buf,
 		.mem_block_queue.len = ARRAY_SIZE(rx_0_ring_buf),
 		.stream_start = rx_stream_start,
@@ -1007,14 +1038,7 @@ static struct i2s_sam_dev_data i2s0_sam_data = {
 	},
 	.tx = {
 		.dma_channel = DT_INST_DMAS_CELL_BY_NAME(0, tx, channel),
-		.dma_cfg = {
-			.block_count = 1,
-			.dma_slot = DT_INST_DMAS_CELL_BY_NAME(0, tx, perid),
-			.channel_direction = MEMORY_TO_PERIPHERAL,
-			.source_burst_length = 1,
-			.dest_burst_length = 1,
-			.dma_callback = dma_tx_callback,
-		},
+		.dma_perid = DT_INST_DMAS_CELL_BY_NAME(0, tx, perid),
 		.mem_block_queue.buf = tx_0_ring_buf,
 		.mem_block_queue.len = ARRAY_SIZE(tx_0_ring_buf),
 		.stream_start = tx_stream_start,
@@ -1024,6 +1048,6 @@ static struct i2s_sam_dev_data i2s0_sam_data = {
 	},
 };
 
-DEVICE_DT_INST_DEFINE(0, &i2s_sam_initialize, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, &i2s_sam_initialize, NULL,
 		    &i2s0_sam_data, &i2s0_sam_config, POST_KERNEL,
 		    CONFIG_I2S_INIT_PRIORITY, &i2s_sam_driver_api);

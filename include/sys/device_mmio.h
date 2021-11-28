@@ -16,6 +16,7 @@
 #define ZEPHYR_INCLUDE_SYS_DEVICE_MMIO_H
 
 #include <toolchain/common.h>
+#include <linker/sections.h>
 
 /**
  * @defgroup device-mmio Device memory-mapped IO management
@@ -81,6 +82,7 @@ struct z_device_mmio_rom {
  * @param flags Caching mode and access flags, see K_MEM_CACHE_* and
  *              K_MEM_PERM_* macros
  */
+__boot_func
 static inline void device_map(mm_reg_t *virt_addr, uintptr_t phys_addr,
 			      size_t size, uint32_t flags)
 {
@@ -321,7 +323,7 @@ struct z_device_mmio_rom {
  *
  * struct foo_driver_data {
  *      int blarg;
- *      DEVICE_MMIO_NAMED_RAM(courge);
+ *      DEVICE_MMIO_NAMED_RAM(corge);
  *      DEVICE_MMIO_NAMED_RAM(grault);
  *      int wibble;
  *      ...
@@ -378,7 +380,7 @@ struct z_device_mmio_rom {
  *
  * struct foo_config {
  *      int bar;
- *      DEVICE_MMIO_NAMED_ROM(courge);
+ *      DEVICE_MMIO_NAMED_ROM(corge);
  *      DEVICE_MMIO_NAMED_ROM(grault);
  *      int baz;
  *      ...
@@ -415,11 +417,11 @@ struct z_device_mmio_rom {
  * a device config struct, using information from DTS.
  *
  * Example for an instance of a driver belonging to the "foo" subsystem
- * that will have two regions named 'courge' and 'grault':
+ * that will have two regions named 'corge' and 'grault':
  *
  * struct foo_config my_config = {
  *	bar = 7;
- *	DEVICE_MMIO_NAMED_ROM_INIT(courge, DT_DRV_INST(...));
+ *	DEVICE_MMIO_NAMED_ROM_INIT(corge, DT_DRV_INST(...));
  *	DEVICE_MMIO_NAMED_ROM_INIT(grault, DT_DRV_INST(...));
  *	baz = 2;
  *	...
@@ -539,11 +541,14 @@ struct z_device_mmio_rom {
  */
 #ifdef DEVICE_MMIO_IS_IN_RAM
 #define DEVICE_MMIO_TOPLEVEL(name, node_id) \
+	__pinned_bss \
 	mm_reg_t Z_TOPLEVEL_RAM_NAME(name); \
+	__pinned_rodata \
 	const struct z_device_mmio_rom Z_TOPLEVEL_ROM_NAME(name) = \
 		Z_DEVICE_MMIO_ROM_INITIALIZER(node_id)
 #else
 #define DEVICE_MMIO_TOPLEVEL(name, node_id) \
+	__pinned_rodata \
 	const struct z_device_mmio_rom Z_TOPLEVEL_ROM_NAME(name) = \
 		Z_DEVICE_MMIO_ROM_INITIALIZER(node_id)
 #endif /* DEVICE_MMIO_IS_IN_RAM */
@@ -587,11 +592,14 @@ struct z_device_mmio_rom {
  */
 #ifdef DEVICE_MMIO_IS_IN_RAM
 #define DEVICE_MMIO_TOPLEVEL_STATIC(name, node_id) \
+	__pinned_bss \
 	static mm_reg_t Z_TOPLEVEL_RAM_NAME(name); \
+	__pinned_rodata \
 	static const struct z_device_mmio_rom Z_TOPLEVEL_ROM_NAME(name) = \
 		Z_DEVICE_MMIO_ROM_INITIALIZER(node_id)
 #else
 #define DEVICE_MMIO_TOPLEVEL_STATIC(name, node_id) \
+	__pinned_rodata \
 	static const struct z_device_mmio_rom Z_TOPLEVEL_ROM_NAME(name) = \
 		Z_DEVICE_MMIO_ROM_INITIALIZER(node_id)
 #endif /* DEVICE_MMIO_IS_IN_RAM */

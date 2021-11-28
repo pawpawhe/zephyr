@@ -172,10 +172,10 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 		/* Swap IP src and destination address so that we can receive
 		 * the packet and the stack will not reject it.
 		 */
-		net_ipaddr_copy(&addr, &NET_IPV6_HDR(pkt)->src);
-		net_ipaddr_copy(&NET_IPV6_HDR(pkt)->src,
-				&NET_IPV6_HDR(pkt)->dst);
-		net_ipaddr_copy(&NET_IPV6_HDR(pkt)->dst, &addr);
+		net_ipv6_addr_copy_raw((uint8_t *)&addr, NET_IPV6_HDR(pkt)->src);
+		net_ipv6_addr_copy_raw(NET_IPV6_HDR(pkt)->src,
+				       NET_IPV6_HDR(pkt)->dst);
+		net_ipv6_addr_copy_raw(NET_IPV6_HDR(pkt)->dst, (uint8_t *)&addr);
 
 		udp_hdr = net_udp_get_hdr(pkt, &hdr);
 		zassert_not_null(udp_hdr, "UDP header missing");
@@ -266,7 +266,7 @@ static int eth_init(const struct device *dev)
  * is quite unlikely that this would be done in real life but for testing
  * purposes create it here.
  */
-NET_DEVICE_INIT(eth_test, "eth_test", eth_init, device_pm_control_nop,
+NET_DEVICE_INIT(eth_test, "eth_test", eth_init, NULL,
 		&eth_context, NULL, CONFIG_ETH_INIT_PRIORITY, &api_funcs,
 		DUMMY_L2, NET_L2_GET_CTX_TYPE(DUMMY_L2),
 		NET_ETH_MTU);
@@ -276,7 +276,7 @@ static void address_setup(void)
 	struct net_if_addr *ifaddr;
 	struct net_if *iface1;
 
-	iface1 = net_if_get_default();
+	iface1 = net_if_get_first_by_type(&NET_L2_GET_NAME(DUMMY));
 
 	zassert_not_null(iface1, "Interface 1");
 
@@ -379,7 +379,7 @@ static void setup_net_context(struct net_context **ctx)
 	int ret;
 	struct net_if *iface1;
 
-	iface1 = net_if_get_default();
+	iface1 = net_if_get_first_by_type(&NET_L2_GET_NAME(DUMMY));
 
 	ret = net_context_get(AF_INET6, SOCK_DGRAM, IPPROTO_UDP, ctx);
 	zassert_equal(ret, 0, "Create IPv6 UDP context %p failed (%d)\n",

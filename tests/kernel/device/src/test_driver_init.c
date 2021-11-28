@@ -8,6 +8,7 @@
 #include <device.h>
 #include <init.h>
 #include <ztest.h>
+#include <linker/sections.h>
 
 
 /**
@@ -36,10 +37,10 @@
 
 
 /* this is for storing sequence during initializtion */
-int init_level_sequence[4] = {0};
-int init_priority_sequence[4] = {0};
-unsigned int seq_level_cnt;
-unsigned int seq_priority_cnt;
+__pinned_bss int init_level_sequence[4] = {0};
+__pinned_bss int init_priority_sequence[4] = {0};
+__pinned_bss unsigned int seq_level_cnt;
+__pinned_bss unsigned int seq_priority_cnt;
 
 /* define driver type 1: for testing initialize levels and priorites */
 typedef int (*my_api_configure_t)(const struct device *dev, int dev_config);
@@ -58,6 +59,7 @@ static const struct my_driver_api funcs_my_drivers = {
 };
 
 /* driver init function of testing level */
+__pinned_func
 static int my_driver_lv_1_init(const struct device *dev)
 {
 	init_level_sequence[seq_level_cnt] = LEVEL_PRE_KERNEL_1;
@@ -66,6 +68,7 @@ static int my_driver_lv_1_init(const struct device *dev)
 	return 0;
 }
 
+__pinned_func
 static int my_driver_lv_2_init(const struct device *dev)
 {
 	init_level_sequence[seq_level_cnt] = LEVEL_PRE_KERNEL_2;
@@ -135,19 +138,19 @@ static int my_driver_pri_4_init(const struct device *dev)
  * @ingroup kernel_device_tests
  */
 DEVICE_DEFINE(my_driver_level_1, MY_DRIVER_LV_1, &my_driver_lv_1_init,
-		device_pm_control_nop, NULL, NULL, PRE_KERNEL_1,
+		NULL, NULL, NULL, PRE_KERNEL_1,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &funcs_my_drivers);
 
 DEVICE_DEFINE(my_driver_level_2, MY_DRIVER_LV_2, &my_driver_lv_2_init,
-		device_pm_control_nop, NULL, NULL, PRE_KERNEL_2,
+		NULL, NULL, NULL, PRE_KERNEL_2,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &funcs_my_drivers);
 
 DEVICE_DEFINE(my_driver_level_3, MY_DRIVER_LV_3, &my_driver_lv_3_init,
-		device_pm_control_nop, NULL, NULL, POST_KERNEL,
+		NULL, NULL, NULL, POST_KERNEL,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &funcs_my_drivers);
 
 DEVICE_DEFINE(my_driver_level_4, MY_DRIVER_LV_4, &my_driver_lv_4_init,
-		device_pm_control_nop, NULL, NULL, APPLICATION,
+		NULL, NULL, NULL, APPLICATION,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &funcs_my_drivers);
 
 /* We use priority value of 20 to create a possible sorting conflict with
@@ -155,17 +158,17 @@ DEVICE_DEFINE(my_driver_level_4, MY_DRIVER_LV_4, &my_driver_lv_4_init,
  * we'll find out.
  */
 DEVICE_DEFINE(my_driver_priority_4, MY_DRIVER_PRI_4,
-		&my_driver_pri_4_init, device_pm_control_nop,
-		NULL, NULL, POST_KERNEL, 20, &funcs_my_drivers);
+		&my_driver_pri_4_init, NULL, NULL, NULL, POST_KERNEL, 20,
+		&funcs_my_drivers);
 
 DEVICE_DEFINE(my_driver_priority_1, MY_DRIVER_PRI_1,
-		&my_driver_pri_1_init, device_pm_control_nop,
-		NULL, NULL, POST_KERNEL, 1, &funcs_my_drivers);
+		&my_driver_pri_1_init, NULL, NULL, NULL, POST_KERNEL, 1,
+		&funcs_my_drivers);
 
 DEVICE_DEFINE(my_driver_priority_2, MY_DRIVER_PRI_2,
-		&my_driver_pri_2_init, device_pm_control_nop,
-		NULL, NULL, POST_KERNEL, 2, &funcs_my_drivers);
+		&my_driver_pri_2_init, NULL, NULL, NULL, POST_KERNEL, 2,
+		&funcs_my_drivers);
 
 DEVICE_DEFINE(my_driver_priority_3, MY_DRIVER_PRI_3,
-		&my_driver_pri_3_init, device_pm_control_nop,
-		NULL, NULL, POST_KERNEL, 3, &funcs_my_drivers);
+		&my_driver_pri_3_init, NULL, NULL, NULL, POST_KERNEL, 3,
+		&funcs_my_drivers);

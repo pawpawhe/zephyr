@@ -207,6 +207,11 @@ static int spi_dw_configure(const struct spi_dw_config *info,
 		return 0;
 	}
 
+	if (config->operation & SPI_HALF_DUPLEX) {
+		LOG_ERR("Half-duplex not supported");
+		return -ENOTSUP;
+	}
+
 	/* Verify if requested op mode is relevant to this controller */
 	if (config->operation & SPI_OP_MODE_SLAVE) {
 		if (!(info->op_modes & SPI_CTX_RUNTIME_OP_MODE_SLAVE)) {
@@ -220,8 +225,10 @@ static int spi_dw_configure(const struct spi_dw_config *info,
 		}
 	}
 
-	if (config->operation & (SPI_TRANSFER_LSB |
-				 SPI_LINES_DUAL | SPI_LINES_QUAD)) {
+	if ((config->operation & SPI_TRANSFER_LSB) ||
+	    (IS_ENABLED(CONFIG_SPI_EXTENDED_MODES) &&
+	     (config->operation & (SPI_LINES_DUAL |
+				   SPI_LINES_QUAD | SPI_LINES_OCTAL)))) {
 		LOG_ERR("Unsupported configuration");
 		return -EINVAL;
 	}
@@ -257,8 +264,6 @@ static int spi_dw_configure(const struct spi_dw_config *info,
 					       config->frequency), info->regs);
 		write_ser(1 << config->slave, info->regs);
 	}
-
-	spi_context_cs_configure(&spi->ctx);
 
 	if (spi_dw_is_slave(spi)) {
 		LOG_DBG("Installed slave config %p:"
@@ -344,8 +349,8 @@ static int transceive(const struct device *dev,
 	spi_context_lock(&spi->ctx, asynchronous, signal, config);
 
 #ifdef CONFIG_PM_DEVICE
-	if (device_busy_check(dev) != (-EBUSY)) {
-		device_busy_set(dev);
+	if (!pm_device_is_busy(dev)) {
+		pm_device_busy_set(dev);
 	}
 #endif /* CONFIG_PM_DEVICE */
 
@@ -434,7 +439,7 @@ static int transceive(const struct device *dev,
 out:
 	spi_context_release(&spi->ctx, ret);
 
-	device_busy_clear(dev);
+	pm_device_busy_clear(dev);
 
 	return ret;
 }
@@ -517,6 +522,7 @@ static const struct spi_driver_api dw_spi_api = {
 
 int spi_dw_init(const struct device *dev)
 {
+	int err;
 	const struct spi_dw_config *info = dev->config;
 	struct spi_dw_data *spi = dev->data;
 
@@ -527,6 +533,11 @@ int spi_dw_init(const struct device *dev)
 	clear_bit_ssienr(info->regs);
 
 	LOG_DBG("Designware SPI driver initialized on device: %p", dev);
+
+	err = spi_context_cs_configure_all(&spi->ctx);
+	if (err < 0) {
+		return err;
+	}
 
 	spi_context_unlock_unconditionally(&spi->ctx);
 
@@ -540,6 +551,7 @@ void spi_config_0_irq(void);
 struct spi_dw_data spi_dw_data_port_0 = {
 	SPI_CONTEXT_INIT_LOCK(spi_dw_data_port_0, ctx),
 	SPI_CONTEXT_INIT_SYNC(spi_dw_data_port_0, ctx),
+	SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(0), ctx)
 };
 
 #if DT_NODE_HAS_PROP(DT_INST_PHANDLE(0, clocks), clock_frequency)
@@ -557,7 +569,7 @@ const struct spi_dw_config spi_dw_config_0 = {
 	.op_modes = SPI_CTX_RUNTIME_OP_MODE_MASTER
 };
 
-DEVICE_DT_INST_DEFINE(0, spi_dw_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, spi_dw_init, NULL,
 		    &spi_dw_data_port_0, &spi_dw_config_0,
 		    POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,
 		    &dw_spi_api);
@@ -603,6 +615,7 @@ void spi_config_1_irq(void);
 struct spi_dw_data spi_dw_data_port_1 = {
 	SPI_CONTEXT_INIT_LOCK(spi_dw_data_port_1, ctx),
 	SPI_CONTEXT_INIT_SYNC(spi_dw_data_port_1, ctx),
+	SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(1), ctx)
 };
 
 #if DT_NODE_HAS_PROP(DT_INST_PHANDLE(1, clocks), clock_frequency)
@@ -620,7 +633,7 @@ static const struct spi_dw_config spi_dw_config_1 = {
 	.op_modes = SPI_CTX_RUNTIME_OP_MODE_MASTER
 };
 
-DEVICE_DT_INST_DEFINE(1, spi_dw_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(1, spi_dw_init, NULL,
 		    &spi_dw_data_port_1, &spi_dw_config_1,
 		    POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,
 		    &dw_spi_api);
@@ -666,6 +679,7 @@ void spi_config_2_irq(void);
 struct spi_dw_data spi_dw_data_port_2 = {
 	SPI_CONTEXT_INIT_LOCK(spi_dw_data_port_2, ctx),
 	SPI_CONTEXT_INIT_SYNC(spi_dw_data_port_2, ctx),
+	SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(2), ctx)
 };
 
 #if DT_NODE_HAS_PROP(DT_INST_PHANDLE(2, clocks), clock_frequency)
@@ -683,7 +697,7 @@ static const struct spi_dw_config spi_dw_config_2 = {
 	.op_modes = SPI_CTX_RUNTIME_OP_MODE_MASTER
 };
 
-DEVICE_DT_INST_DEFINE(2, spi_dw_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(2, spi_dw_init, NULL,
 		    &spi_dw_data_port_2, &spi_dw_config_2,
 		    POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,
 		    &dw_spi_api);
@@ -729,6 +743,7 @@ void spi_config_3_irq(void);
 struct spi_dw_data spi_dw_data_port_3 = {
 	SPI_CONTEXT_INIT_LOCK(spi_dw_data_port_3, ctx),
 	SPI_CONTEXT_INIT_SYNC(spi_dw_data_port_3, ctx),
+	SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(3), ctx)
 };
 
 #if DT_NODE_HAS_PROP(DT_INST_PHANDLE(3, clocks), clock_frequency)
@@ -746,7 +761,7 @@ static const struct spi_dw_config spi_dw_config_3 = {
 	.op_modes = SPI_CTX_RUNTIME_OP_MODE_MASTER
 };
 
-DEVICE_DT_INST_DEFINE(3, spi_dw_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(3, spi_dw_init, NULL,
 		    &spi_dw_data_port_3, &spi_dw_config_3,
 		    POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,
 		    &dw_spi_api);

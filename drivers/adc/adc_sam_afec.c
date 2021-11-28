@@ -356,7 +356,7 @@ static void adc_sam_isr(const struct device *dev)
 		.regs = (Afec *)DT_INST_REG_ADDR(n),			\
 		.cfg_func = adc##n##_sam_cfg_func,			\
 		.periph_id = DT_INST_PROP(n, peripheral_id),		\
-		.afec_trg_pin = ATMEL_SAM_DT_PIN(n, 0),			\
+		.afec_trg_pin = ATMEL_SAM_DT_INST_PIN(n, 0),		\
 	};								\
 									\
 	static struct adc_sam_data adc##n##_sam_data = {		\
@@ -365,10 +365,10 @@ static void adc_sam_isr(const struct device *dev)
 		ADC_CONTEXT_INIT_SYNC(adc##n##_sam_data, ctx),		\
 	};								\
 									\
-	DEVICE_DT_INST_DEFINE(n, adc_sam_init, device_pm_control_nop,	\
+	DEVICE_DT_INST_DEFINE(n, adc_sam_init, NULL,			\
 			    &adc##n##_sam_data,				\
 			    &adc##n##_sam_cfg, POST_KERNEL,		\
-			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
+			    CONFIG_ADC_INIT_PRIORITY,			\
 			    &adc_sam_api);				\
 									\
 	static void adc##n##_sam_cfg_func(const struct device *dev)	\

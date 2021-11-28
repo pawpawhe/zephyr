@@ -29,7 +29,7 @@
 #endif
 
 #ifdef CONFIG_PM_DEVICE
-#include <power/power.h>
+#include <pm/device.h>
 #endif
 
 static int gpio_dw_port_set_bits_raw(const struct device *port, uint32_t mask);
@@ -221,7 +221,7 @@ static int gpio_dw_pin_interrupt_configure(const struct device *port,
 	uint32_t dir_reg;
 
 	/* Check for invalid pin number */
-	if (pin >= config->bits) {
+	if (pin >= config->ngpios) {
 		return -EINVAL;
 	}
 
@@ -313,7 +313,7 @@ static inline int gpio_dw_config(const struct device *port,
 	uint32_t io_flags;
 
 	/* Check for invalid pin number */
-	if (pin >= config->bits) {
+	if (pin >= config->ngpios) {
 		return -EINVAL;
 	}
 
@@ -425,64 +425,26 @@ static inline int gpio_dw_manage_callback(const struct device *port,
 }
 
 #ifdef CONFIG_PM_DEVICE
-static void gpio_dw_set_power_state(const struct device *port,
-				    uint32_t power_state)
-{
-	struct gpio_dw_runtime *context = port->data;
-
-	context->device_power_state = power_state;
-}
-
-static uint32_t gpio_dw_get_power_state(const struct device *port)
-{
-	struct gpio_dw_runtime *context = port->data;
-
-	return context->device_power_state;
-}
-
-static inline int gpio_dw_suspend_port(const struct device *port)
-{
-	gpio_dw_clock_off(port);
-	gpio_dw_set_power_state(port, DEVICE_PM_SUSPEND_STATE);
-
-	return 0;
-}
-
-static inline int gpio_dw_resume_from_suspend_port(const struct device *port)
-{
-	gpio_dw_clock_on(port);
-	gpio_dw_set_power_state(port, DEVICE_PM_ACTIVE_STATE);
-	return 0;
-}
-
 /*
 * Implements the driver control management functionality
 * the *context may include IN data or/and OUT data
 */
-static int gpio_dw_device_ctrl(const struct device *port,
-			       uint32_t ctrl_command,
-			       void *context, device_pm_cb cb, void *arg)
+static int gpio_dw_device_pm_action(const struct device *dev,
+				    enum pm_device_action action)
 {
-	int ret = 0;
-
-	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
-		if (*((uint32_t *)context) == DEVICE_PM_SUSPEND_STATE) {
-			ret = gpio_dw_suspend_port(port);
-		} else if (*((uint32_t *)context) == DEVICE_PM_ACTIVE_STATE) {
-			ret = gpio_dw_resume_from_suspend_port(port);
-		}
-	} else if (ctrl_command == DEVICE_PM_GET_POWER_STATE) {
-		*((uint32_t *)context) = gpio_dw_get_power_state(port);
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		gpio_dw_clock_off(dev);
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		gpio_dw_clock_on(dev);
+		break;
+	default:
+		return -ENOTSUP;
 	}
 
-	if (cb) {
-		cb(port, ret, context, arg);
-	}
-	return ret;
+	return 0;
 }
-
-#else
-#define gpio_dw_set_power_state(...)
 #endif
 
 #define gpio_dw_unmask_int(...)
@@ -544,8 +506,6 @@ static int gpio_dw_initialize(const struct device *port)
 		config->config_func(port);
 	}
 
-	gpio_dw_set_power_state(port, DEVICE_PM_ACTIVE_STATE);
-
 	return 0;
 }
 
@@ -560,7 +520,7 @@ static const struct gpio_dw_config gpio_config_0 = {
 #ifdef CONFIG_GPIO_DW_0_IRQ_DIRECT
 	.irq_num = DT_INST_IRQN(0),
 #endif
-	.bits = DT_INST_PROP(0, bits),
+	.ngpios = DT_INST_PROP(0, ngpios),
 	.config_func = gpio_config_0_irq,
 #ifdef CONFIG_GPIO_DW_0_IRQ_SHARED
 	.shared_irq_dev_name = DT_INST_IRQ_BY_NAME(0, shared_name, irq),
@@ -574,9 +534,11 @@ static struct gpio_dw_runtime gpio_0_runtime = {
 	.base_addr = DT_INST_REG_ADDR(0),
 };
 
+PM_DEVICE_DT_INST_DEFINE(0, gpio_dw_device_pm_action);
+
 DEVICE_DT_INST_DEFINE(0,
-	      gpio_dw_initialize, gpio_dw_device_ctrl, &gpio_0_runtime,
-	      &gpio_config_0, POST_KERNEL, CONFIG_GPIO_DW_INIT_PRIORITY,
+	      gpio_dw_initialize, PM_DEVICE_DT_INST_REF(0), &gpio_0_runtime,
+	      &gpio_config_0, POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY,
 	      &api_funcs);
 
 #if DT_INST_IRQ_HAS_CELL(0, flags)
@@ -621,7 +583,7 @@ static const struct gpio_dw_config gpio_dw_config_1 = {
 #ifdef CONFIG_GPIO_DW_1_IRQ_DIRECT
 	.irq_num = DT_INST_IRQN(1),
 #endif
-	.bits = DT_INST_PROP(1, bits),
+	.ngpios = DT_INST_PROP(1, ngpios),
 	.config_func = gpio_config_1_irq,
 
 #ifdef CONFIG_GPIO_DW_1_IRQ_SHARED
@@ -636,9 +598,11 @@ static struct gpio_dw_runtime gpio_1_runtime = {
 	.base_addr = DT_INST_REG_ADDR(1),
 };
 
+PM_DEVICE_DT_INST_DEFINE(1, gpio_dw_device_pm_action);
+
 DEVICE_DT_INST_DEFINE(1,
-	      gpio_dw_initialize, gpio_dw_device_ctrl, &gpio_1_runtime,
-	      &gpio_dw_config_1, POST_KERNEL, CONFIG_GPIO_DW_INIT_PRIORITY,
+	      gpio_dw_initialize, PM_DEVICE_DT_INST_REF(1), &gpio_1_runtime,
+	      &gpio_dw_config_1, POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY,
 	      &api_funcs);
 
 #if DT_INST_IRQ_HAS_CELL(1, flags)
@@ -682,7 +646,7 @@ static const struct gpio_dw_config gpio_dw_config_2 = {
 #ifdef CONFIG_GPIO_DW_2_IRQ_DIRECT
 	.irq_num = DT_INST_IRQN(2),
 #endif
-	.bits = DT_INST_PROP(2, bits),
+	.ngpios = DT_INST_PROP(2, ngpios),
 	.config_func = gpio_config_2_irq,
 
 #ifdef CONFIG_GPIO_DW_2_IRQ_SHARED
@@ -697,9 +661,11 @@ static struct gpio_dw_runtime gpio_2_runtime = {
 	.base_addr = DT_INST_REG_ADDR(2),
 };
 
+PM_DEVICE_DT_INST_DEFINE(2, gpio_dw_device_pm_action);
+
 DEVICE_DT_INST_DEFINE(2,
-	      gpio_dw_initialize, gpio_dw_device_ctrl, &gpio_2_runtime,
-	      &gpio_dw_config_2, POST_KERNEL, CONFIG_GPIO_DW_INIT_PRIORITY,
+	      gpio_dw_initialize, PM_DEVICE_DT_INST_REF(2), &gpio_2_runtime,
+	      &gpio_dw_config_2, POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY,
 	      &api_funcs);
 
 #if DT_INST_IRQ_HAS_CELL(2, flags)
@@ -743,7 +709,7 @@ static const struct gpio_dw_config gpio_dw_config_3 = {
 #ifdef CONFIG_GPIO_DW_3_IRQ_DIRECT
 	.irq_num = DT_INST_IRQN(3),
 #endif
-	.bits = DT_INST_PROP(3, bits),
+	.ngpios = DT_INST_PROP(3, ngpios),
 	.config_func = gpio_config_3_irq,
 
 #ifdef CONFIG_GPIO_DW_3_IRQ_SHARED
@@ -758,9 +724,11 @@ static struct gpio_dw_runtime gpio_3_runtime = {
 	.base_addr = DT_INST_REG_ADDR(3),
 };
 
+PM_DEVICE_DT_INST_DEFINE(3, gpio_dw_device_pm_action);
+
 DEVICE_DT_INST_DEFINE(3,
-	      gpio_dw_initialize, gpio_dw_device_ctrl, &gpio_3_runtime,
-	      &gpio_dw_config_3, POST_KERNEL, CONFIG_GPIO_DW_INIT_PRIORITY,
+	      gpio_dw_initialize, PM_DEVICE_DT_INST_REF(3), &gpio_3_runtime,
+	      &gpio_dw_config_3, POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY,
 	      &api_funcs);
 
 #if DT_INST_IRQ_HAS_CELL(3, flags)

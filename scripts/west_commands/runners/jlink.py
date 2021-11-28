@@ -5,19 +5,19 @@
 '''Runner for debugging with J-Link.'''
 
 import argparse
+from functools import partial
+import logging
 import os
-import platform
-import re
+from pathlib import Path
 import shlex
-from subprocess import TimeoutExpired
+import subprocess
 import sys
 import tempfile
 
-from runners.core import ZephyrBinaryRunner, RunnerCaps, \
-    BuildConfiguration
+from runners.core import ZephyrBinaryRunner, RunnerCaps, depr_action
 
 try:
-    from packaging import version
+    from pylink.library import Library
     MISSING_REQUIREMENTS = False
 except ImportError:
     MISSING_REQUIREMENTS = True
@@ -33,9 +33,9 @@ class ToggleAction(argparse.Action):
 class JLinkBinaryRunner(ZephyrBinaryRunner):
     '''Runner front-end for the J-Link GDB server.'''
 
-    def __init__(self, cfg, device,
+    def __init__(self, cfg, device, dev_id=None,
                  commander=DEFAULT_JLINK_EXE,
-                 flash_addr=0x0, erase=True, reset_after_load=False,
+                 dt_flash=True, erase=True, reset_after_load=False,
                  iface='swd', speed='auto',
                  gdbserver='JLinkGDBServer',
                  gdb_host='',
@@ -47,8 +47,9 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
         self.elf_name = cfg.elf_file
         self.gdb_cmd = [cfg.gdb] if cfg.gdb else None
         self.device = device
+        self.dev_id = dev_id
         self.commander = commander
-        self.flash_addr = flash_addr
+        self.dt_flash = dt_flash
         self.erase = erase
         self.reset_after_load = reset_after_load
         self.gdbserver = gdbserver
@@ -69,7 +70,12 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
     @classmethod
     def capabilities(cls):
         return RunnerCaps(commands={'flash', 'debug', 'debugserver', 'attach'},
-                          flash_addr=True, erase=True)
+                          dev_id=True, flash_addr=True, erase=True)
+
+    @classmethod
+    def dev_id_help(cls) -> str:
+        return '''Device identifier. Use it to select the J-Link Serial Number
+                  of the device connected over USB.'''
 
     @classmethod
     def do_add_parser(cls, parser):
@@ -77,6 +83,10 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
         parser.add_argument('--device', required=True, help='device name')
 
         # Optional:
+        parser.add_argument('--id', required=False, dest='dev_id',
+                            action=partial(depr_action,
+                                           replacement='-i/--dev-id'),
+                            help='Deprecated: use -i/--dev-id instead')
         parser.add_argument('--iface', default='swd',
                             help='interface to use, default is swd')
         parser.add_argument('--speed', default='auto',
@@ -95,7 +105,8 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
                             help='''Additional options for JLink Commander,
                             e.g. \'-autoconnect 1\' ''')
         parser.add_argument('--commander', default=DEFAULT_JLINK_EXE,
-                            help='J-Link Commander, default is JLinkExe')
+                            help=f'''J-Link Commander, default is
+                            {DEFAULT_JLINK_EXE}''')
         parser.add_argument('--reset-after-load', '--no-reset-after-load',
                             dest='reset_after_load', nargs=0,
                             action=ToggleAction,
@@ -105,11 +116,11 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
 
     @classmethod
     def do_create(cls, cfg, args):
-        build_conf = BuildConfiguration(cfg.build_dir)
-        flash_addr = cls.get_flash_address(args, build_conf)
         return JLinkBinaryRunner(cfg, args.device,
+                                 dev_id=args.dev_id,
                                  commander=args.commander,
-                                 flash_addr=flash_addr, erase=args.erase,
+                                 dt_flash=args.dt_flash,
+                                 erase=args.erase,
                                  reset_after_load=args.reset_after_load,
                                  iface=args.iface, speed=args.speed,
                                  gdbserver=args.gdbserver,
@@ -118,55 +129,95 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
                                  tui=args.tui, tool_opt=args.tool_opt)
 
     def print_gdbserver_message(self):
-        self.logger.info('J-Link GDB server running on port {}'.
-                         format(self.gdb_port))
+        if not self.thread_info_enabled:
+            thread_msg = '; no thread info available'
+        elif self.supports_thread_info:
+            thread_msg = '; thread info enabled'
+        else:
+            thread_msg = '; update J-Link software for thread info'
+        self.logger.info('J-Link GDB server running on port '
+                         f'{self.gdb_port}{thread_msg}')
 
-    def read_version(self):
-        '''Read the J-Link Commander version output.
-
-        J-Link Commander does not provide neither a stand-alone version string
-        output nor command line parameter help output. To find the version, we
-        launch it using a bogus command line argument (to get it to fail) and
-        read the version information provided to stdout.
-
-        A timeout is used since the J-Link Commander takes up to a few seconds
-        to exit upon failure.'''
-        if platform.system() == 'Windows' or "microsoft" in platform.release().lower():
-            # The check below does not work on Microsoft Windows or in WSL
-            return ''
-
-        self.require(self.commander)
-        # Match "Vd.dd" substring
-        ver_re = re.compile(r'\s+V([.0-9]+)[a-zA-Z]*\s+', re.IGNORECASE)
-        cmd = ([self.commander] + ['-bogus-argument-that-does-not-exist'])
-        try:
-            self.check_output(cmd, timeout=1)
-        except TimeoutExpired as e:
-            ver_m = ver_re.search(e.output.decode('utf-8'))
-            if ver_m:
-                return ver_m.group(1)
+    @property
+    def jlink_version(self):
+        # Get the J-Link version as a (major, minor, rev) tuple of integers.
+        #
+        # J-Link's command line tools provide neither a standalone
+        # "--version" nor help output that contains the version. Hack
+        # around this deficiency by using the third-party pylink library
+        # to load the shared library distributed with the tools, which
+        # provides an API call for getting the version.
+        if not hasattr(self, '_jlink_version'):
+            plat = sys.platform
+            if plat.startswith('win32'):
+                libname = Library.get_appropriate_windows_sdk_name() + '.dll'
+            elif plat.startswith('linux'):
+                libname = Library.JLINK_SDK_NAME + '.so'
+            elif plat.startswith('darwin'):
+                libname = Library.JLINK_SDK_NAME + '.dylib'
             else:
-                return ''
+                self.logger.warning(f'unknown platform {plat}; assuming UNIX')
+                libname = Library.JLINK_SDK_NAME + '.so'
 
+            lib = Library(dllpath=os.fspath(Path(self.commander).parent /
+                                            libname))
+            version = int(lib.dll().JLINKARM_GetDLLVersion())
+            self.logger.debug('JLINKARM_GetDLLVersion()=%s', version)
+            # The return value is an int with 2 decimal digits per
+            # version subfield.
+            self._jlink_version = (version // 10000,
+                                   (version // 100) % 100,
+                                   version % 100)
+
+        return self._jlink_version
+
+    @property
+    def jlink_version_str(self):
+        # Converts the numeric revision tuple to something human-readable.
+        if not hasattr(self, '_jlink_version_str'):
+            major, minor, rev = self.jlink_version
+            rev_str = chr(ord('a') + rev - 1) if rev else ''
+            self._jlink_version_str = f'{major}.{minor:02}{rev_str}'
+        return self._jlink_version_str
+
+    @property
     def supports_nogui(self):
-        ver = self.read_version()
         # -nogui was introduced in J-Link Commander v6.80
-        return version.parse(ver) >= version.parse("6.80")
+        return self.jlink_version >= (6, 80, 0)
+
+    @property
+    def supports_thread_info(self):
+        # RTOSPlugin_Zephyr was introduced in 7.11b
+        return self.jlink_version >= (7, 11, 2)
 
     def do_run(self, command, **kwargs):
         if MISSING_REQUIREMENTS:
             raise RuntimeError('one or more Python dependencies were missing; '
                                "see the getting started guide for details on "
                                "how to fix")
+        # Convert commander to a real absolute path. We need this to
+        # be able to find the shared library that tells us what
+        # version of the tools we're using.
+        self.commander = os.fspath(
+            Path(self.require(self.commander)).resolve())
+        self.logger.info(f'JLink version: {self.jlink_version_str}')
+
+        rtos = self.thread_info_enabled and self.supports_thread_info
+        plugin_dir = os.fspath(Path(self.commander).parent / 'GDBServer' /
+                               'RTOSPlugin_Zephyr')
 
         server_cmd = ([self.gdbserver] +
-                      ['-select', 'usb', # only USB connections supported
+                       # only USB connections supported
+                      ['-select', 'usb' + (f'={self.dev_id}'
+                                           if self.dev_id else ''),
                        '-port', str(self.gdb_port),
                        '-if', self.iface,
                        '-speed', self.speed,
                        '-device', self.device,
                        '-silent',
                        '-singlerun'] +
+                      (['-nogui'] if self.supports_nogui else []) +
+                      (['-rtos', plugin_dir] if rtos else []) +
                       self.tool_opt)
 
         if command == 'flash':
@@ -200,9 +251,10 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
                 self.run_client(client_cmd)
 
     def flash(self, **kwargs):
-        self.require(self.commander)
-
-        lines = ['r'] # Reset and halt the target
+        lines = [
+            'ExitOnError 1',  # Treat any command-error as fatal
+            'r',  # Reset and halt the target
+        ]
 
         if self.erase:
             lines.append('erase') # Erase all flash sectors
@@ -210,16 +262,20 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
         # Get the build artifact to flash, prefering .hex over .bin
         if self.hex_name is not None and os.path.isfile(self.hex_name):
             flash_file = self.hex_name
-            flash_fmt = 'loadfile {}'
+            flash_cmd = f'loadfile {self.hex_name}'
         elif self.bin_name is not None and os.path.isfile(self.bin_name):
+            if self.dt_flash:
+                flash_addr = self.flash_address_from_build_conf(self.build_conf)
+            else:
+                flash_addr = 0
             flash_file = self.bin_name
-            flash_fmt = 'loadfile {} 0x{:x}'
+            flash_cmd = f'loadfile {self.bin_name} 0x{flash_addr:x}'
         else:
             err = 'Cannot flash; no hex ({}) or bin ({}) files found.'
             raise ValueError(err.format(self.hex_name, self.bin_name))
 
         # Flash the selected build artifact
-        lines.append(flash_fmt.format(flash_file, self.flash_addr))
+        lines.append(flash_cmd)
 
         if self.reset_after_load:
             lines.append('r') # Reset and halt the target
@@ -237,8 +293,8 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
 
         lines.append('q') # Close the connection and quit
 
-        self.logger.debug('JLink commander script:')
-        self.logger.debug('\n'.join(lines))
+        self.logger.debug('JLink commander script:\n' +
+                          '\n'.join(lines))
 
         # Don't use NamedTemporaryFile: the resulting file can't be
         # opened again on Windows.
@@ -246,18 +302,19 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
             fname = os.path.join(d, 'runner.jlink')
             with open(fname, 'wb') as f:
                 f.writelines(bytes(line + '\n', 'utf-8') for line in lines)
-
-            if self.supports_nogui():
-                nogui = ['-nogui', '1']
-            else:
-                nogui = []
-
-            cmd = ([self.commander] + nogui +
+            cmd = ([self.commander] +
+                    # only USB connections supported
+                   (['-USB', f'{self.dev_id}'] if self.dev_id else []) +
+                   (['-nogui', '1'] if self.supports_nogui else []) +
                    ['-if', self.iface,
                     '-speed', self.speed,
                     '-device', self.device,
                     '-CommanderScript', fname] +
+                   (['-nogui', '1'] if self.supports_nogui else []) +
                    self.tool_opt)
 
             self.logger.info('Flashing file: {}'.format(flash_file))
-            self.check_call(cmd)
+            kwargs = {}
+            if not self.logger.isEnabledFor(logging.DEBUG):
+                kwargs['stdout'] = subprocess.DEVNULL
+            self.check_call(cmd, **kwargs)

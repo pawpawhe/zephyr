@@ -219,13 +219,13 @@ struct bt_l2cap_ecred_reconf_req {
 #define BT_L2CAP_RECONF_SUCCESS         0x0000
 #define BT_L2CAP_RECONF_INVALID_MTU     0x0001
 #define BT_L2CAP_RECONF_INVALID_MPS     0x0002
+#define BT_L2CAP_RECONF_INVALID_CID     0x0003
+#define BT_L2CAP_RECONF_OTHER_UNACCEPT  0x0004
 
 #define BT_L2CAP_ECRED_RECONF_RSP       0x1a
 struct bt_l2cap_ecred_reconf_rsp {
 	uint16_t result;
 } __packed;
-
-#define BT_L2CAP_SDU_HDR_LEN            2
 
 struct bt_l2cap_fixed_chan {
 	uint16_t		cid;
@@ -234,7 +234,7 @@ struct bt_l2cap_fixed_chan {
 };
 
 #define BT_L2CAP_CHANNEL_DEFINE(_name, _cid, _accept, _destroy)         \
-	const Z_STRUCT_SECTION_ITERABLE(bt_l2cap_fixed_chan, _name) = { \
+	const STRUCT_SECTION_ITERABLE(bt_l2cap_fixed_chan, _name) = {   \
 				.cid = _cid,                            \
 				.accept = _accept,                      \
 				.destroy = _destroy,                    \
@@ -247,7 +247,7 @@ struct bt_l2cap_br_fixed_chan {
 };
 
 #define BT_L2CAP_BR_CHANNEL_DEFINE(_name, _cid, _accept)		\
-	const Z_STRUCT_SECTION_ITERABLE(bt_l2cap_br_fixed_chan, _name) = { \
+	const STRUCT_SECTION_ITERABLE(bt_l2cap_br_fixed_chan, _name) = { \
 				.cid = _cid,			\
 				.accept = _accept,		\
 			}
@@ -300,23 +300,19 @@ struct net_buf *bt_l2cap_create_rsp(struct net_buf *buf, size_t reserve);
 
 /* Send L2CAP PDU over a connection
  *
- * Buffer ownership is transferred to stack so either in case of success
- * or error the buffer will be unref internally.
- *
- * Calling this from RX thread is assumed to never fail so the return can be
- * ignored.
+ * Buffer ownership is transferred to stack in case of success.
  */
 int bt_l2cap_send_cb(struct bt_conn *conn, uint16_t cid, struct net_buf *buf,
 		     bt_conn_tx_cb_t cb, void *user_data);
 
-static inline void bt_l2cap_send(struct bt_conn *conn, uint16_t cid,
-				 struct net_buf *buf)
+static inline int bt_l2cap_send(struct bt_conn *conn, uint16_t cid,
+				struct net_buf *buf)
 {
-	bt_l2cap_send_cb(conn, cid, buf, NULL, NULL);
+	return bt_l2cap_send_cb(conn, cid, buf, NULL, NULL);
 }
 
 /* Receive a new L2CAP PDU from a connection */
-void bt_l2cap_recv(struct bt_conn *conn, struct net_buf *buf);
+void bt_l2cap_recv(struct bt_conn *conn, struct net_buf *buf, bool complete);
 
 /* Perform connection parameter update request */
 int bt_l2cap_update_conn_param(struct bt_conn *conn,

@@ -375,11 +375,11 @@ static const struct xlnx_uartlite_config xlnx_uartlite_##n##_config = {	\
 									\
 	DEVICE_DT_INST_DEFINE(n,					\
 			    &xlnx_uartlite_init,			\
-			    device_pm_control_nop,			\
+			    NULL,					\
 			    &xlnx_uartlite_##n##_data,			\
 			    &xlnx_uartlite_##n##_config,		\
 			    PRE_KERNEL_1,				\
-			    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
+			    CONFIG_SERIAL_INIT_PRIORITY,		\
 			    &xlnx_uartlite_driver_api);			\
 									\
 	XLNX_UARTLITE_CONFIG_FUNC(n)					\

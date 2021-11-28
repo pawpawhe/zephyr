@@ -91,18 +91,23 @@ Supported Features
 
 The board configuration supports the following hardware features:
 
-+-----------+------------+----------------------+
-| Interface | Controller | Driver/Component     |
-+===========+============+======================+
-| NVIC      | on-chip    | nested vectored      |
-|           |            | interrupt controller |
-+-----------+------------+----------------------+
-| SYSTICK   | on-chip    | system clock         |
-+-----------+------------+----------------------+
-| GPIO      | on-chip    | gpio                 |
-+-----------+------------+----------------------+
-| UART      | on-chip    | serial port-polling  |
-+-----------+------------+----------------------+
++-----------+------------+-----------------------+
+| Interface | Controller | Driver/Component      |
++===========+============+=======================+
+| NVIC      | on-chip    | nested vectored       |
+|           |            | interrupt controller  |
++-----------+------------+-----------------------+
+| SYSTICK   | on-chip    | system clock          |
++-----------+------------+-----------------------+
+| GPIO      | on-chip    | gpio                  |
++-----------+------------+-----------------------+
+| PINCTRL   | on-chip    | pin control           |
++-----------+------------+-----------------------+
+| SPI       | on-chip    | spi                   |
++-----------+------------+-----------------------+
+| UART      | on-chip    | serial port-polling;  |
+|           |            | serial port-interrupt |
++-----------+------------+-----------------------+
 
 
 The default configurations can be found in the Kconfig
@@ -170,6 +175,99 @@ Cy_WDT_Disable().
       :compact:
 
    You should see "Hello World! cy8ckit_062_ble_m0" in your terminal.
+
+Running on Dual Core
+********************
+
+#. Build the Zephyr kernel and the :ref:`button-sample` sample application:
+
+   .. zephyr-app-commands::
+      :zephyr-app: samples/basic/button
+      :board: cy8ckit_062_ble_m4
+      :goals: build
+      :compact:
+
+#. If you have a USB-Serial adapter, you can connect SBC[UART]-6 on Arduino
+   header.  Schematic should be checked for connections.   Run your favorite
+   terminal program again now listen for another output.   Under Linux the
+   terminal should be :code:`/dev/ttyUSB0`. For example:
+
+   .. code-block:: console
+
+      $ minicom -D /dev/ttyUSB0 -o
+
+   The -o option tells minicom not to send the modem initialization
+   string. Connection should be configured as follows:
+
+      - Speed: 115200
+      - Data: 8 bits
+      - Parity: None
+      - Stop bits: 1
+
+#. To flash an image:
+
+   .. zephyr-app-commands::
+      :zephyr-app: samples/basic/button
+      :board: cy8ckit_062_ble_m4
+      :goals: flash
+      :compact:
+
+#. Configure Cortex-M0+ to enable Cortex-M4:
+
+   The last step flash the M4 image on the flash.  However, Cortex-M0 by default
+   doesn't start the M4 and nothing will happen.  To enable Cortex-M4 CPU,
+   repeat the steps on programming and debug and add the following parameter
+   when performing the build process.
+
+   .. zephyr-app-commands::
+      :zephyr-app: samples/hello_world
+      :board: cy8ckit_062_ble_m0
+      :goals: build flash
+      :gen-args: -DCONFIG_SOC_PSOC6_M0_ENABLES_M4=y
+      :compact:
+
+   Now you can press button SW-2 and see LED-9 blink at same time you have the
+   "Hello World! cy8ckit_062_ble_m0" in the your terminal.
+
+Board Revision
+**************
+
+The CY8CKIT-062-BLE KitProg2 shares connections with Arduino-R3 header.  This
+connections may not allow the correct use of shields.  The default board
+revision (0.0.0) allows use of default connections.  The use of Arduino headers
+are only possible after rework the board and using the revision 1.0.0.
+
+#. Build the Zephyr kernel and the :ref:`hello_world` sample application for
+   board revision 1.0.0:
+
+   .. zephyr-app-commands::
+      :zephyr-app: samples/hello_world
+      :board: cy8ckit_062_ble_m0@1.0.0
+      :goals: build
+      :compact:
+
+#. The diferences from version 0.0.0 to 1.0.0:
+
++-------------+------------+------------+
+| Connecion   | 0.0.0      | 1.0.0      |
++=============+============+============+
+| CDC-COM RX  | P5_0       | P9_0       |
++-------------+------------+------------+
+| CDC-COM TX  | P5_1       | P9_1       |
++-------------+------------+------------+
+| R77         |  X         |            |
++-------------+------------+------------+
+| R78         |            |   X        |
++-------------+------------+------------+
+
+
+The P9 pins are available at J2. Those signals should be routed to J6.
+
+J2-2 to J6-14
+J2-4 to J6-13
+
+The most complex part is short circuit pins 14 and 15 from U13.  That connect
+UART_RTS with UART_CTS from KitProg2.
 
 References
 **********

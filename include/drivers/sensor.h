@@ -121,6 +121,9 @@ enum sensor_channel {
 	SENSOR_CHAN_VOLTAGE,
 	/** Current, in amps **/
 	SENSOR_CHAN_CURRENT,
+	/** Power in watts **/
+	SENSOR_CHAN_POWER,
+
 	/** Resistance , in Ohm **/
 	SENSOR_CHAN_RESISTANCE,
 
@@ -219,8 +222,8 @@ enum sensor_trigger_type {
 	/**
 	 * Trigger fires when channel reading transitions configured
 	 * thresholds.  The thresholds are configured via the @ref
-	 * SENSOR_ATTR_LOWER_THRESH and @ref SENSOR_ATTR_UPPER_THRESH
-	 * attributes.
+	 * SENSOR_ATTR_LOWER_THRESH, @ref SENSOR_ATTR_UPPER_THRESH, and
+	 * @ref SENSOR_ATTR_HYSTERESIS attributes.
 	 */
 	SENSOR_TRIG_THRESHOLD,
 
@@ -280,6 +283,8 @@ enum sensor_attribute {
 	 * outside the threshold for the trigger to fire.
 	 */
 	SENSOR_ATTR_SLOPE_DUR,
+	/* Hysteresis for trigger thresholds. */
+	SENSOR_ATTR_HYSTERESIS,
 	/** Oversampling factor */
 	SENSOR_ATTR_OVERSAMPLING,
 	/** Sensor range, in SI units. */
@@ -294,6 +299,14 @@ enum sensor_attribute {
 	 * algorithms to calibrate itself on a certain axis, or all of them.
 	 */
 	SENSOR_ATTR_CALIB_TARGET,
+	/** Configure the operating modes of a sensor. */
+	SENSOR_ATTR_CONFIGURATION,
+	/** Set a calibration value needed by a sensor. */
+	SENSOR_ATTR_CALIBRATION,
+	/** Enable/disable sensor features */
+	SENSOR_ATTR_FEATURE_MASK,
+	/** Alert threshold or alert enable/disable */
+	SENSOR_ATTR_ALERT,
 
 	/**
 	 * Number of all common sensor attributes.
@@ -320,7 +333,7 @@ enum sensor_attribute {
  * @param trigger The trigger
  */
 typedef void (*sensor_trigger_handler_t)(const struct device *dev,
-					 struct sensor_trigger *trigger);
+					 const struct sensor_trigger *trigger);
 
 /**
  * @typedef sensor_attr_set_t
@@ -451,7 +464,7 @@ static inline int z_impl_sensor_attr_get(const struct device *dev,
  * driver.  It is currently up to the caller to ensure that the handler
  * does not overflow the stack.
  *
- * This API is not permitted for user threads.
+ * @funcprops \supervisor
  *
  * @param dev Pointer to the sensor device
  * @param trig The trigger to activate
@@ -461,7 +474,7 @@ static inline int z_impl_sensor_attr_get(const struct device *dev,
  * @return 0 if successful, negative errno code if failure.
  */
 static inline int sensor_trigger_set(const struct device *dev,
-				     struct sensor_trigger *trig,
+				     const struct sensor_trigger *trig,
 				     sensor_trigger_handler_t handler)
 {
 	const struct sensor_driver_api *api =
@@ -643,9 +656,21 @@ static inline void sensor_degrees_to_rad(int32_t d, struct sensor_value *rad)
  * @param val A pointer to a sensor_value struct.
  * @return The converted value.
  */
-static inline double sensor_value_to_double(struct sensor_value *val)
+static inline double sensor_value_to_double(const struct sensor_value *val)
 {
 	return (double)val->val1 + (double)val->val2 / 1000000;
+}
+
+/**
+ * @brief Helper function for converting double to struct sensor_value.
+ *
+ * @param val A pointer to a sensor_value struct.
+ * @param inp The converted value.
+ */
+static inline void sensor_value_from_double(struct sensor_value *val, double inp)
+{
+	val->val1 = (int32_t) inp;
+	val->val2 = (int32_t)(inp * 1000000) % 1000000;
 }
 
 /**

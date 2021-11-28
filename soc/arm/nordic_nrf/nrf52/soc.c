@@ -71,6 +71,9 @@ static int nordicsemi_nrf52_init(const struct device *arg)
 #if defined(CONFIG_SOC_DCDC_NRF52X)
 	nrf_power_dcdcen_set(NRF_POWER, true);
 #endif
+#if NRF_POWER_HAS_DCDCEN_VDDH && defined(CONFIG_SOC_DCDC_NRF52X_HV)
+	nrf_power_dcdcen_vddh_set(NRF_POWER, true);
+#endif
 
 	/* Install default handler that simply resets the CPU
 	* if configured in the kernel, NOP otherwise
@@ -85,11 +88,6 @@ static int nordicsemi_nrf52_init(const struct device *arg)
 void arch_busy_wait(uint32_t time_us)
 {
 	nrfx_coredep_delay_us(time_us);
-}
-
-void z_platform_init(void)
-{
-	SystemInit();
 }
 
 SYS_INIT(nordicsemi_nrf52_init, PRE_KERNEL_1, 0);

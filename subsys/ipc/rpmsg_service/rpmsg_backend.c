@@ -41,12 +41,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_RPMSG_SERVICE_LOG_LEVEL);
 #define VRING_SIZE		    16
 
 #define IPM_WORK_QUEUE_STACK_SIZE CONFIG_RPMSG_SERVICE_WORK_QUEUE_STACK_SIZE
-
-#if IS_ENABLED(CONFIG_COOP_ENABLED)
-#define IPM_WORK_QUEUE_PRIORITY -1
-#else
-#define IPM_WORK_QUEUE_PRIORITY 0
-#endif
+#define IPM_WORK_QUEUE_PRIORITY   K_HIGHEST_APPLICATION_THREAD_PRIO
 
 K_THREAD_STACK_DEFINE(ipm_stack_area, IPM_WORK_QUEUE_STACK_SIZE);
 
@@ -180,9 +175,9 @@ int rpmsg_backend_init(struct metal_io_region **io, struct virtio_device *vdev)
 	struct metal_device     *device;
 
 	/* Start IPM workqueue */
-	k_work_q_start(&ipm_work_q, ipm_stack_area,
+	k_work_queue_start(&ipm_work_q, ipm_stack_area,
 			   K_THREAD_STACK_SIZEOF(ipm_stack_area),
-			   IPM_WORK_QUEUE_PRIORITY);
+			   IPM_WORK_QUEUE_PRIORITY, NULL);
 	k_thread_name_set(&ipm_work_q.thread, "ipm_work_q");
 
 	/* Setup IPM workqueue item */
@@ -229,6 +224,13 @@ int rpmsg_backend_init(struct metal_io_region **io, struct virtio_device *vdev)
 	}
 
 	ipm_register_callback(ipm_rx_handle, ipm_callback, NULL);
+
+	err = ipm_set_enabled(ipm_rx_handle, 1);
+	if (err != 0) {
+		LOG_ERR("Could not enable IPM interrupts and callbacks for RX");
+		return err;
+	}
+
 #elif defined(CONFIG_RPMSG_SERVICE_SINGLE_IPM_SUPPORT)
 	ipm_handle = device_get_binding(CONFIG_RPMSG_SERVICE_IPM_NAME);
 

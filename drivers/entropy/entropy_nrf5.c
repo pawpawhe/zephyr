@@ -332,9 +332,9 @@ static const struct entropy_driver_api entropy_nrf5_api_funcs = {
 };
 
 DEVICE_DT_INST_DEFINE(0,
-		    entropy_nrf5_init, device_pm_control_nop,
+		    entropy_nrf5_init, NULL,
 		    &entropy_nrf5_data, NULL,
-		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    PRE_KERNEL_1, CONFIG_ENTROPY_INIT_PRIORITY,
 		    &entropy_nrf5_api_funcs);
 
 static int entropy_nrf5_init(const struct device *dev)

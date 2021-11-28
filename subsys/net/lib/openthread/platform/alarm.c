@@ -16,11 +16,13 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include <openthread/platform/alarm-milli.h>
 #include <openthread/platform/alarm-micro.h>
+#include <openthread/platform/diag.h>
 #include <openthread-system.h>
 
 #include <stdio.h>
 
 #include "platform-zephyr.h"
+#include "openthread-core-zephyr-config.h"
 
 static bool timer_ms_fired, timer_us_fired;
 
@@ -52,7 +54,14 @@ void platformAlarmProcess(otInstance *aInstance)
 {
 	if (timer_ms_fired) {
 		timer_ms_fired = false;
-		otPlatAlarmMilliFired(aInstance);
+#if defined(CONFIG_OPENTHREAD_DIAG)
+		if (otPlatDiagModeGet()) {
+			otPlatDiagAlarmFired(aInstance);
+		} else
+#endif
+		{
+			otPlatAlarmMilliFired(aInstance);
+		}
 	}
 #if OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE
 	if (timer_us_fired) {
@@ -71,8 +80,7 @@ void otPlatAlarmMilliStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
 {
 	ARG_UNUSED(aInstance);
 
-	int64_t reftime = (int64_t)aT0 + (int64_t)aDt;
-	int64_t delta = -k_uptime_delta(&reftime);
+	int32_t delta = (int32_t)(aT0 + aDt - otPlatAlarmMilliGetNow());
 
 	if (delta > 0) {
 		k_timer_start(&ot_ms_timer, K_MSEC(delta), K_NO_WAIT);
@@ -92,9 +100,7 @@ void otPlatAlarmMicroStartAt(otInstance *aInstance, uint32_t aT0, uint32_t aDt)
 {
 	ARG_UNUSED(aInstance);
 
-	uint64_t reftime = aT0 + aDt;
-	uint64_t curtime = k_ticks_to_us_floor64(k_uptime_ticks());
-	int64_t delta = reftime - curtime;
+	int32_t delta = (int32_t)(aT0 + aDt - otPlatAlarmMicroGetNow());
 
 	if (delta > 0) {
 		k_timer_start(&ot_us_timer, K_USEC(delta), K_NO_WAIT);

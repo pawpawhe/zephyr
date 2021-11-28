@@ -41,9 +41,12 @@
  *
  * _ENUM_IDX: property's value as an index into bindings enum
  * _ENUM_TOKEN: property's value as a token into bindings enum (string
- *              enum values are identifiers)
- * _ENUM_UPPER_TOKEN: like _ENUM_TOKEN, but uppercased
+ *              enum values are identifiers) [deprecated, use _STRING_TOKEN]
+ * _ENUM_UPPER_TOKEN: like _ENUM_TOKEN, but uppercased [deprecated, use
+ *		      _STRING_UPPER_TOKEN]
  * _EXISTS: property is defined
+ * _FOREACH_PROP_ELEM: helper for "iterating" over values in the property
+ * _FOREACH_PROP_ELEM_VARGS: foreach functions with variable number of arguments
  * _IDX_<i>: logical index into property
  * _IDX_<i>_EXISTS: logical index into property is defined
  * _IDX_<i>_PH: phandle array's phandle by index (or phandle, phandles)
@@ -53,6 +56,8 @@
  * _NAME_<name>_PH: phandle array's phandle by name
  * _NAME_<name>_VAL_<val>: phandle array's property specifier by name
  * _NAME_<name>_VAL_<val>_EXISTS: cell value exists, by name
+ * _STRING_TOKEN: string property's value as a token
+ * _STRING_UPPER_TOKEN: like _STRING_TOKEN, but uppercased
  */
 
 /**
@@ -544,7 +549,8 @@
  * - reg property: use DT_NUM_REGS(node_id) instead
  * - interrupts property: use DT_NUM_IRQS(node_id) instead
  *
- * It is an error to use this macro with the reg or interrupts properties.
+ * It is an error to use this macro with the ranges, dma-ranges, reg
+ * or interrupts properties.
  *
  * For other properties, behavior is undefined.
  *
@@ -701,6 +707,113 @@
 		    (DT_ENUM_IDX(node_id, prop)), (default_idx_value))
 
 /**
+ * @brief Get a string property's value as a token.
+ *
+ * This removes "the quotes" from string-valued properties, and converts
+ * non-alphanumeric characters to underscores. That can be useful, for example,
+ * when programmatically using the value to form a C variable or code.
+ *
+ * DT_STRING_TOKEN() can only be used for properties with string type.
+ *
+ * It is an error to use DT_STRING_TOKEN() in other circumstances.
+ *
+ * Example devicetree fragment:
+ *
+ *     n1: node-1 {
+ *             prop = "foo";
+ *     };
+ *     n2: node-2 {
+ *             prop = "FOO";
+ *     }
+ *     n3: node-3 {
+ *             prop = "123 foo";
+ *     };
+ *
+ * Example bindings fragment:
+ *
+ *     properties:
+ *       prop:
+ *         type: string
+ *
+ * Example usage:
+ *
+ *     DT_STRING_TOKEN(DT_NODELABEL(n1), prop) // foo
+ *     DT_STRING_TOKEN(DT_NODELABEL(n2), prop) // FOO
+ *     DT_STRING_TOKEN(DT_NODELABEL(n3), prop) // 123_foo
+ *
+ * Notice how:
+ *
+ * - Unlike C identifiers, the property values may begin with a
+ *   number. It's the user's responsibility not to use such values as
+ *   the name of a C identifier.
+ *
+ * - The uppercased "FOO" in the DTS remains @p FOO as a token. It is
+ *   *not* converted to @p foo.
+ *
+ * - The whitespace in the DTS "123 foo" string is converted to @p
+ *   123_foo as a token.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property string name
+ * @return the value of @p prop as a token, i.e. without any quotes
+ *         and with special characters converted to underscores
+ */
+#define DT_STRING_TOKEN(node_id, prop) \
+	DT_CAT4(node_id, _P_, prop, _STRING_TOKEN)
+
+/**
+ * @brief Like DT_STRING_TOKEN(), but uppercased.
+ *
+ * This removes "the quotes and capitalize" from string-valued properties, and
+ * converts non-alphanumeric characters to underscores. That can be useful, for
+ * example, when programmatically using the value to form a C variable or code.
+ *
+ * DT_STRING_UPPER_TOKEN() can only be used for properties with string type.
+ *
+ * It is an error to use DT_STRING_UPPER_TOKEN() in other circumstances.
+ *
+ * Example devicetree fragment:
+ *
+ *     n1: node-1 {
+ *             prop = "foo";
+ *     };
+ *     n2: node-2 {
+ *             prop = "123 foo";
+ *     };
+ *
+ * Example bindings fragment:
+ *
+ *     properties:
+ *       prop:
+ *         type: string
+ *
+ * Example usage:
+ *
+ *     DT_STRING_UPPER_TOKEN(DT_NODELABEL(n1), prop) // FOO
+ *     DT_STRING_UPPER_TOKEN(DT_NODELABEL(n2), prop) // 123_FOO
+ *
+ * Notice how:
+ *
+ * - Unlike C identifiers, the property values may begin with a
+ *   number. It's the user's responsibility not to use such values as
+ *   the name of a C identifier.
+ *
+ * - The lowercased "foo" in the DTS becomes @p FOO as a token, i.e.
+ *   it is uppercased.
+ *
+ * - The whitespace in the DTS "123 foo" string is converted to @p
+ *   123_FOO as a token, i.e. it is uppercased and whitespace becomes
+ *   an underscore.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property string name
+ * @return the value of @p prop as a token, i.e. without any quotes
+ *         and with special characters converted to underscores
+ */
+#define DT_STRING_UPPER_TOKEN(node_id, prop) \
+	DT_CAT4(node_id, _P_, prop, _STRING_UPPER_TOKEN)
+
+/**
  * @brief Get an enumeration property's value as a token.
  *
  * This allows you to "remove the quotes" from some string-valued
@@ -739,9 +852,9 @@
  *
  * Example usage:
  *
- *     DT_ENUM_TOKEN((DT_NODELABEL(n1), prop) // foo
- *     DT_ENUM_TOKEN((DT_NODELABEL(n2), prop) // FOO
- *     DT_ENUM_TOKEN((DT_NODELABEL(n3), prop) // 123_foo
+ *     DT_ENUM_TOKEN(DT_NODELABEL(n1), prop) // foo
+ *     DT_ENUM_TOKEN(DT_NODELABEL(n2), prop) // FOO
+ *     DT_ENUM_TOKEN(DT_NODELABEL(n3), prop) // 123_foo
  *
  * Notice how:
  *
@@ -762,6 +875,7 @@
  *         and with special characters converted to underscores
  */
 #define DT_ENUM_TOKEN(node_id, prop) \
+	__DEPRECATED_MACRO \
 	DT_CAT4(node_id, _P_, prop, _ENUM_TOKEN)
 
 /**
@@ -821,6 +935,7 @@
  *         underscores
  */
 #define DT_ENUM_UPPER_TOKEN(node_id, prop) \
+	__DEPRECATED_MACRO \
 	DT_CAT4(node_id, _P_, prop, _ENUM_UPPER_TOKEN)
 
 /*
@@ -1180,6 +1295,360 @@
  */
 
 /**
+ * @defgroup devicetree-ranges-prop ranges property
+ * @ingroup devicetree
+ * @{
+ */
+
+/**
+ * @brief Get the number of range blocks in the ranges property
+ *
+ * Use this instead of DT_PROP_LEN(node_id, ranges).
+ *
+ * Example devicetree fragment:
+ *
+ *     pcie0: pcie@0 {
+ *             compatible = "intel,pcie";
+ *             reg = <0 1>;
+ *             #address-cells = <3>;
+ *             #size-cells = <2>;
+ *
+ *             ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                      <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                      <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *     };
+ *
+ *     other: other@1 {
+ *             reg = <1 1>;
+ *
+ *             ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                      <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_NUM_RANGES(DT_NODELABEL(pcie0)) // 3
+ *     DT_NUM_RANGES(DT_NODELABEL(other)) // 2
+ *
+ * @param node_id node identifier
+ */
+#define DT_NUM_RANGES(node_id) DT_CAT(node_id, _RANGES_NUM)
+
+/**
+ * @brief Is "idx" a valid range block index?
+ *
+ * If this returns 1, then DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(node_id, idx),
+ * DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(node_id, idx) or
+ * DT_RANGES_LENGTH_BY_IDX(node_id, idx) are valid.
+ * For DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(node_id, idx) the return value
+ * of DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(node_id, idx) will indicate
+ * validity.
+ * If it returns 0, it is an error to use those macros with index "idx",
+ * including DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(node_id, idx).
+ *
+ * Example devicetree fragment:
+ *
+ *
+ *     pcie0: pcie@0 {
+ *             compatible = "intel,pcie";
+ *             reg = <0 1>;
+ *             #address-cells = <3>;
+ *             #size-cells = <2>;
+ *
+ *             ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                      <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                      <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *     };
+ *
+ *     other: other@1 {
+ *             reg = <1 1>;
+ *
+ *             ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                      <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(pcie0), 0) // 1
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(pcie0), 1) // 1
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(pcie0), 2) // 1
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(pcie0), 3) // 0
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(other), 0) // 1
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(other), 1) // 1
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(other), 2) // 0
+ *     DT_RANGES_HAS_IDX(DT_NODELABEL(other), 3) // 0
+ *
+ * @param node_id node identifier
+ * @param idx index to check
+ * @return 1 if "idx" is a valid register block index,
+ *         0 otherwise.
+ */
+#define DT_RANGES_HAS_IDX(node_id, idx) \
+	IS_ENABLED(DT_CAT4(node_id, _RANGES_IDX_, idx, _EXISTS))
+
+/**
+ * @brief Does a ranges property have child bus flags at index?
+ *
+ * If this returns 1, then DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(node_id, idx) is valid.
+ * If it returns 0, it is an error to use this macro with index "idx".
+ * This macro only returns 1 for PCIe buses (i.e. nodes whose bindings specify they
+ * are "pcie" bus nodes.)
+ *
+ * Example devicetree fragment:
+ *
+ *     parent {
+ *             #address-cells = <2>;
+ *
+ *             pcie0: pcie@0 {
+ *                     compatible = "intel,pcie";
+ *                     reg = <0 0 1>;
+ *                     #address-cells = <3>;
+ *                     #size-cells = <2>;
+ *
+ *                     ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                              <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                              <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *             };
+ *
+ *             other: other@1 {
+ *                     reg = <0 1 1>;
+ *
+ *                     ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                              <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(pcie0), 0) // 1
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(pcie0), 1) // 1
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(pcie0), 2) // 1
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(pcie0), 3) // 0
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(other), 0) // 0
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(other), 1) // 0
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(other), 2) // 0
+ *     DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(DT_NODELABEL(other), 3) // 0
+ *
+ * @param node_id node identifier
+ * @param idx logical index into the ranges array
+ * @return 1 if "idx" is a valid child bus flags index,
+ *         0 otherwise.
+ */
+#define DT_RANGES_HAS_CHILD_BUS_FLAGS_AT_IDX(node_id, idx) \
+	IS_ENABLED(DT_CAT4(node_id, _RANGES_IDX_, idx, _VAL_CHILD_BUS_FLAGS_EXISTS))
+
+/**
+ * @brief Get the ranges property child bus flags at index
+ *
+ * When the node is a PCIe bus, the Child Bus Address has an extra cell used to store some
+ * flags, thus this cell is extracted from the Child Bus Address as Child Bus Flags field.
+ *
+ * Example devicetree fragments:
+ *
+ *     parent {
+ *             #address-cells = <2>;
+ *
+ *             pcie0: pcie@0 {
+ *                     compatible = "intel,pcie";
+ *                     reg = <0 0 1>;
+ *                     #address-cells = <3>;
+ *                     #size-cells = <2>;
+ *
+ *                     ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                              <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                              <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(DT_NODELABEL(pcie0), 0) // 0x1000000
+ *     DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(DT_NODELABEL(pcie0), 1) // 0x2000000
+ *     DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(DT_NODELABEL(pcie0), 2) // 0x3000000
+ *
+ * @param node_id node identifier
+ * @param idx logical index into the ranges array
+ * @returns range child bus flags field at idx
+ */
+#define DT_RANGES_CHILD_BUS_FLAGS_BY_IDX(node_id, idx) \
+	DT_CAT4(node_id, _RANGES_IDX_, idx, _VAL_CHILD_BUS_FLAGS)
+
+/**
+ * @brief Get the ranges property child bus address at index
+ *
+ * When the node is a PCIe bus, the Child Bus Address has an extra cell used to store some
+ * flags, thus this cell is removed from the Child Bus Address.
+ *
+ * Example devicetree fragments:
+ *
+ *     parent {
+ *             #address-cells = <2>;
+ *
+ *             pcie0: pcie@0 {
+ *                     compatible = "intel,pcie";
+ *                     reg = <0 0 1>;
+ *                     #address-cells = <3>;
+ *                     #size-cells = <2>;
+ *
+ *                     ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                              <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                              <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *             };
+ *
+ *             other: other@1 {
+ *                     reg = <0 1 1>;
+ *
+ *                     ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                              <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(DT_NODELABEL(pcie0), 0) // 0
+ *     DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(DT_NODELABEL(pcie0), 1) // 0x10000000
+ *     DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(DT_NODELABEL(pcie0), 2) // 0x8000000000
+ *     DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(DT_NODELABEL(other), 0) // 0
+ *     DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(DT_NODELABEL(other), 1) // 0x10000000
+ *
+ * @param node_id node identifier
+ * @param idx logical index into the ranges array
+ * @returns range child bus address field at idx
+ */
+#define DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(node_id, idx) \
+	DT_CAT4(node_id, _RANGES_IDX_, idx, _VAL_CHILD_BUS_ADDRESS)
+
+/**
+ * @brief Get the ranges property parent bus address at index
+ *
+ * Similarly to DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(), this properly accounts
+ * for child bus flags cells when the node is a PCIe bus.
+ *
+ * Example devicetree fragment:
+ *
+ *     parent {
+ *             #address-cells = <2>;
+ *
+ *             pcie0: pcie@0 {
+ *                     compatible = "intel,pcie";
+ *                     reg = <0 0 1>;
+ *                     #address-cells = <3>;
+ *                     #size-cells = <2>;
+ *
+ *                     ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                              <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                              <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *             };
+ *
+ *             other: other@1 {
+ *                     reg = <0 1 1>;
+ *
+ *                     ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                              <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(DT_NODELABEL(pcie0), 0) // 0x3eff0000
+ *     DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(DT_NODELABEL(pcie0), 1) // 0x10000000
+ *     DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(DT_NODELABEL(pcie0), 2) // 0x8000000000
+ *     DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(DT_NODELABEL(other), 0) // 0x3eff0000
+ *     DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(DT_NODELABEL(other), 1) // 0x10000000
+ *
+ * @param node_id node identifier
+ * @param idx logical index into the ranges array
+ * @returns range parent bus address field at idx
+ */
+#define DT_RANGES_PARENT_BUS_ADDRESS_BY_IDX(node_id, idx) \
+	DT_CAT4(node_id, _RANGES_IDX_, idx, _VAL_PARENT_BUS_ADDRESS)
+
+/**
+ * @brief Get the ranges property length at index
+ *
+ * Similarly to DT_RANGES_CHILD_BUS_ADDRESS_BY_IDX(), this properly accounts
+ * for child bus flags cells when the node is a PCIe bus.
+ *
+ * Example devicetree fragment:
+ *
+ *     parent {
+ *             #address-cells = <2>;
+ *
+ *             pcie0: pcie@0 {
+ *                     compatible = "intel,pcie";
+ *                     reg = <0 0 1>;
+ *                     #address-cells = <3>;
+ *                     #size-cells = <2>;
+ *
+ *                     ranges = <0x1000000 0 0 0 0x3eff0000 0 0x10000>,
+ *                              <0x2000000 0 0x10000000 0 0x10000000 0 0x2eff0000>,
+ *                              <0x3000000 0x80 0 0x80 0 0x80 0>;
+ *             };
+ *
+ *             other: other@1 {
+ *                     reg = <0 1 1>;
+ *
+ *                     ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                              <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_RANGES_LENGTH_BY_IDX(DT_NODELABEL(pcie0), 0) // 0x10000
+ *     DT_RANGES_LENGTH_BY_IDX(DT_NODELABEL(pcie0), 1) // 0x2eff0000
+ *     DT_RANGES_LENGTH_BY_IDX(DT_NODELABEL(pcie0), 2) // 0x8000000000
+ *     DT_RANGES_LENGTH_BY_IDX(DT_NODELABEL(other), 0) // 0x10000
+ *     DT_RANGES_LENGTH_BY_IDX(DT_NODELABEL(other), 1) // 0x2eff0000
+ *
+ * @param node_id node identifier
+ * @param idx logical index into the ranges array
+ * @returns range length field at idx
+ */
+#define DT_RANGES_LENGTH_BY_IDX(node_id, idx) \
+	DT_CAT4(node_id, _RANGES_IDX_, idx, _VAL_LENGTH)
+
+/**
+ * @brief Invokes "fn" for each entry of "node_id" ranges property
+ *
+ * The macro "fn" must take two parameters, "node_id" which will be the node
+ * identifier of the node with the ranges property and "idx" the index of
+ * the ranges block.
+ *
+ * Example devicetree fragment:
+ *
+ *     n: node@0 {
+ *             reg = <0 0 1>;
+ *
+ *             ranges = <0x0 0x0 0x0 0x3eff0000 0x10000>,
+ *                      <0x0 0x10000000 0x0 0x10000000 0x2eff0000>;
+ *     };
+ *
+ * Example usage:
+ *
+ *     #define RANGE_LENGTH(node_id, idx) DT_RANGES_LENGTH_BY_IDX(node_id, idx),
+ *
+ *     const uint64_t *ranges_length[] = {
+ *             DT_FOREACH_RANGE(DT_NODELABEL(n), RANGE_LENGTH)
+ *     };
+ *
+ * This expands to:
+ *
+ *     const char *ranges_length[] = {
+ *         0x10000, 0x2eff0000,
+ *     };
+ *
+ * @param node_id node identifier
+ * @param fn macro to invoke
+ */
+#define DT_FOREACH_RANGE(node_id, fn) \
+	DT_CAT(node_id, _FOREACH_RANGE)(fn)
+
+/**
+ * @}
+ */
+
+/**
  * @defgroup devicetree-reg-prop reg property
  * @ingroup devicetree
  * @{
@@ -1484,6 +1953,220 @@
 #define DT_FOREACH_CHILD(node_id, fn) \
 	DT_CAT(node_id, _FOREACH_CHILD)(fn)
 
+/**
+ * @brief Invokes "fn" for each child of "node_id" with multiple arguments
+ *
+ * The macro "fn" takes multiple arguments. The first should be the node
+ * identifier for the child node. The remaining are passed-in by the caller.
+ *
+ * @param node_id node identifier
+ * @param fn macro to invoke
+ * @param ... variable number of arguments to pass to fn
+ *
+ * @see DT_FOREACH_CHILD
+ */
+#define DT_FOREACH_CHILD_VARGS(node_id, fn, ...) \
+	DT_CAT(node_id, _FOREACH_CHILD_VARGS)(fn, __VA_ARGS__)
+
+/**
+ * @brief Call "fn" on the child nodes with status "okay"
+ *
+ * The macro "fn" should take one argument, which is the node
+ * identifier for the child node.
+ *
+ * As usual, both a missing status and an "ok" status are
+ * treated as "okay".
+ *
+ * @param node_id node identifier
+ * @param fn macro to invoke
+ */
+#define DT_FOREACH_CHILD_STATUS_OKAY(node_id, fn) \
+	DT_CAT(node_id, _FOREACH_CHILD_STATUS_OKAY)(fn)
+
+/**
+ * @brief Call "fn" on the child nodes with status "okay" with multiple
+ * arguments
+ *
+ * The macro "fn" takes multiple arguments. The first should be the node
+ * identifier for the child node. The remaining are passed-in by the caller.
+ *
+ * As usual, both a missing status and an "ok" status are
+ * treated as "okay".
+ *
+ * @param node_id node identifier
+ * @param fn macro to invoke
+ * @param ... variable number of arguments to pass to fn
+ *
+ * @see DT_FOREACH_CHILD_STATUS_OKAY
+ */
+#define DT_FOREACH_CHILD_STATUS_OKAY_VARGS(node_id, fn, ...) \
+	DT_CAT(node_id, _FOREACH_CHILD_STATUS_OKAY_VARGS)(fn, __VA_ARGS__)
+
+/**
+ * @brief Invokes "fn" for each element in the value of property "prop".
+ *
+ * The macro "fn" must take three parameters: fn(node_id, prop, idx).
+ * "node_id" and "prop" are the same as what is passed to
+ * DT_FOREACH_PROP_ELEM, and "idx" is the current index into the array.
+ * The "idx" values are integer literals starting from 0.
+ *
+ * Example devicetree fragment:
+ *
+ *     n: node {
+ *             my-ints = <1 2 3>;
+ *     };
+ *
+ * Example usage:
+ *
+ *     #define TIMES_TWO(node_id, prop, idx) \
+ *	       (2 * DT_PROP_BY_IDX(node_id, prop, idx)),
+ *
+ *     int array[] = {
+ *             DT_FOREACH_PROP_ELEM(DT_NODELABEL(n), my_ints, TIMES_TWO)
+ *     };
+ *
+ * This expands to:
+ *
+ *     int array[] = {
+ *             (2 * 1), (2 * 2), (2 * 3),
+ *     };
+ *
+ * In general, this macro expands to:
+ *
+ *     fn(node_id, prop, 0) fn(node_id, prop, 1) [...] fn(node_id, prop, n-1)
+ *
+ * where "n" is the number of elements in "prop", as it would be
+ * returned by <tt>DT_PROP_LEN(node_id, prop)</tt>.
+ *
+ * The "prop" argument must refer to a property with type string,
+ * array, uint8-array, string-array, phandles, or phandle-array. It is
+ * an error to use this macro with properties of other types.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property name
+ * @param fn macro to invoke
+ */
+#define DT_FOREACH_PROP_ELEM(node_id, prop, fn)		\
+	DT_CAT4(node_id, _P_, prop, _FOREACH_PROP_ELEM)(fn)
+
+/**
+ * @brief Invokes "fn" for each element in the value of property "prop" with
+ * multiple arguments.
+ *
+ * The macro "fn" must take multiple parameters: fn(node_id, prop, idx, ...).
+ * "node_id" and "prop" are the same as what is passed to
+ * DT_FOREACH_PROP_ELEM, and "idx" is the current index into the array.
+ * The "idx" values are integer literals starting from 0. The remaining
+ * arguments are passed-in by the caller.
+ *
+ * @param node_id node identifier
+ * @param prop lowercase-and-underscores property name
+ * @param fn macro to invoke
+ * @param ... variable number of arguments to pass to fn
+ *
+ * @see DT_FOREACH_PROP_ELEM
+ */
+#define DT_FOREACH_PROP_ELEM_VARGS(node_id, prop, fn, ...)		\
+	DT_CAT4(node_id, _P_, prop, _FOREACH_PROP_ELEM_VARGS)(fn, __VA_ARGS__)
+
+/**
+ * @brief Call "fn" on all nodes with compatible DT_DRV_COMPAT
+ *        and status "okay"
+ *
+ * This macro expands to:
+ *
+ *     fn(node_id_1) fn(node_id_2) ... fn(node_id_n)
+ *
+ * where each "node_id_<i>" is a node identifier for some node with
+ * compatible "compat" and status "okay". Whitespace is added between
+ * expansions as shown above.
+ *
+ * Example devicetree fragment:
+ *
+ *     / {
+ *             a {
+ *                     compatible = "foo";
+ *                     status = "okay";
+ *             };
+ *             b {
+ *                     compatible = "foo";
+ *                     status = "disabled";
+ *             };
+ *             c {
+ *                     compatible = "foo";
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     DT_FOREACH_STATUS_OKAY(foo, DT_NODE_PATH)
+ *
+ * This expands to one of the following:
+ *
+ *     "/a" "/c"
+ *     "/c" "/a"
+ *
+ * "One of the following" is because no guarantees are made about the
+ * order that node identifiers are passed to "fn" in the expansion.
+ *
+ * (The "/c" string literal is present because a missing status
+ * property is always treated as if the status were set to "okay".)
+ *
+ * Note also that "fn" is responsible for adding commas, semicolons,
+ * or other terminators as needed.
+ *
+ * @param compat lowercase-and-underscores devicetree compatible
+ * @param fn Macro to call for each enabled node. Must accept a
+ *           node_id as its only parameter.
+ */
+#define DT_FOREACH_STATUS_OKAY(compat, fn)				\
+	COND_CODE_1(DT_HAS_COMPAT_STATUS_OKAY(compat),			\
+		    (UTIL_CAT(DT_FOREACH_OKAY_, compat)(fn)),	\
+		    ())
+
+/**
+ * @brief Invokes "fn" for each status "okay" node of a compatible
+ *        with multiple arguments.
+ *
+ * This is like DT_FOREACH_STATUS_OKAY() except you can also pass
+ * additional arguments to "fn".
+ *
+ * Example devicetree fragment:
+ *
+ *     / {
+ *             a {
+ *                     compatible = "foo";
+ *                     val = <3>;
+ *             };
+ *             b {
+ *                     compatible = "foo";
+ *                     val = <4>;
+ *             };
+ *     };
+ *
+ * Example usage:
+ *
+ *     #define MY_FN(node_id, operator) DT_PROP(node_id, val) operator
+ *     x = DT_FOREACH_STATUS_OKAY_VARGS(foo, MY_FN, +) 0;
+ *
+ * This expands to one of the following:
+ *
+ *     x = 3 + 4 + 0;
+ *     x = 4 + 3 + 0;
+ *
+ * i.e. it sets x to 7. As with DT_FOREACH_STATUS_OKAY(), there are no
+ * guarantees about the order nodes appear in the expansion.
+ *
+ * @param compat lowercase-and-underscores devicetree compatible
+ * @param fn Macro to call for each enabled node. Must accept a
+ *           node_id as its only parameter.
+ * @param ... Additional arguments to pass to "fn"
+ */
+#define DT_FOREACH_STATUS_OKAY_VARGS(compat, fn, ...)			\
+	COND_CODE_1(DT_HAS_COMPAT_STATUS_OKAY(compat),			\
+		    (UTIL_CAT(DT_FOREACH_OKAY_VARGS_,			\
+			      compat)(fn, __VA_ARGS__)),		\
+		    ())
 
 /**
  * @}
@@ -1757,6 +2440,41 @@
  */
 #define DT_INST_FOREACH_CHILD(inst, fn) \
 	DT_FOREACH_CHILD(DT_DRV_INST(inst), fn)
+
+/**
+ * @brief Call "fn" on all child nodes of DT_DRV_INST(inst).
+ *
+ * The macro "fn" takes multiple arguments. The first should be the node
+ * identifier for the child node. The remaining are passed-in by the caller.
+ *
+ * @param inst instance number
+ * @param fn macro to invoke on each child node identifier
+ * @param ... variable number of arguments to pass to fn
+ *
+ * @see DT_FOREACH_CHILD
+ */
+#define DT_INST_FOREACH_CHILD_VARGS(inst, fn, ...) \
+	DT_FOREACH_CHILD_VARGS(DT_DRV_INST(inst), fn, __VA_ARGS__)
+
+/**
+ * @brief Get a DT_DRV_COMPAT value's index into its enumeration values
+ * @param inst instance number
+ * @param prop lowercase-and-underscores property name
+ * @return zero-based index of the property's value in its enum: list
+ */
+#define DT_INST_ENUM_IDX(inst, prop) \
+	DT_ENUM_IDX(DT_DRV_INST(inst), prop)
+
+/**
+ * @brief Like DT_INST_ENUM_IDX(), but with a fallback to a default enum index
+ * @param inst instance number
+ * @param prop lowercase-and-underscores property name
+ * @param default_idx_value a fallback index value to expand to
+ * @return zero-based index of the property's value in its enum if present,
+ *         default_idx_value ohterwise
+ */
+#define DT_INST_ENUM_IDX_OR(inst, prop, default_idx_value) \
+	DT_ENUM_IDX_OR(DT_DRV_INST(inst), prop, default_idx_value)
 
 /**
  * @brief Get a DT_DRV_COMPAT instance property
@@ -2152,6 +2870,53 @@
 		    ())
 
 /**
+ * @brief Call "fn" on all nodes with compatible DT_DRV_COMPAT
+ *        and status "okay" with multiple arguments
+ *
+ *
+ * @param fn Macro to call for each enabled node. Must accept an
+ *           instance number as its only parameter.
+ * @param ... variable number of arguments to pass to fn
+ *
+ * @see DT_INST_FOREACH_STATUS_OKAY
+ */
+#define DT_INST_FOREACH_STATUS_OKAY_VARGS(fn, ...) \
+	COND_CODE_1(DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT),	\
+		    (UTIL_CAT(DT_FOREACH_OKAY_INST_VARGS_,	\
+			      DT_DRV_COMPAT)(fn, __VA_ARGS__)),	\
+		    ())
+
+/**
+ * @brief Invokes "fn" for each element of property "prop" for
+ *        a DT_DRV_COMPAT instance.
+ *
+ * Equivalent to DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), prop, fn).
+ *
+ * @param inst instance number
+ * @param prop lowercase-and-underscores property name
+ * @param fn macro to invoke
+ */
+#define DT_INST_FOREACH_PROP_ELEM(inst, prop, fn) \
+	DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), prop, fn)
+
+/**
+ * @brief Invokes "fn" for each element of property "prop" for
+ *        a DT_DRV_COMPAT instance with multiple arguments.
+ *
+ * Equivalent to
+ *      DT_FOREACH_PROP_ELEM_VARGS(DT_DRV_INST(inst), prop, fn, __VA_ARGS__)
+ *
+ * @param inst instance number
+ * @param prop lowercase-and-underscores property name
+ * @param fn macro to invoke
+ * @param ... variable number of arguments to pass to fn
+ *
+ * @see DT_INST_FOREACH_PROP_ELEM
+ */
+#define DT_INST_FOREACH_PROP_ELEM_VARGS(inst, prop, fn, ...) \
+	DT_FOREACH_PROP_ELEM_VARGS(DT_DRV_INST(inst), prop, fn, __VA_ARGS__)
+
+/**
  * @brief Does a DT_DRV_COMPAT instance have a property?
  * @param inst instance number
  * @param prop lowercase-and-underscores property name
@@ -2283,5 +3048,6 @@
 #include <devicetree/fixed-partitions.h>
 #include <devicetree/zephyr.h>
 #include <devicetree/ordinals.h>
+#include <devicetree/pinctrl.h>
 
 #endif /* DEVICETREE_H */

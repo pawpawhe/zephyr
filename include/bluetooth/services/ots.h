@@ -23,12 +23,25 @@ extern "C" {
 
 #include <zephyr/types.h>
 #include <sys/byteorder.h>
+#include <sys/types.h>
 #include <sys/util.h>
 #include <bluetooth/conn.h>
 #include <bluetooth/uuid.h>
 
 /** @brief Size of OTS object ID (in bytes). */
 #define BT_OTS_OBJ_ID_SIZE 6
+
+/** @brief Minimum allowed value for object ID (except ID for directory listing) */
+#define BT_OTS_OBJ_ID_MIN 0x000000000100
+
+/** @brief Maximum allowed value for object ID (except ID for directory listing) */
+#define BT_OTS_OBJ_ID_MAX 0xFFFFFFFFFFFF
+
+/** @brief ID of the Directory Listing Object */
+#define OTS_OBJ_ID_DIR_LIST     0x000000000000
+
+/** @brief Mask for OTS object IDs, preserving the 48 bits */
+#define BT_OTS_OBJ_ID_MASK BIT64_MASK(48)
 
 /** @brief Length of OTS object ID string (in bytes). */
 #define BT_OTS_OBJ_ID_STR_LEN 15
@@ -201,21 +214,6 @@ struct bt_ots_obj_size {
 	/* Allocated Size */
 	uint32_t alloc;
 } __packed;
-
-/** @brief Descriptor for OTS object initialization. */
-struct bt_ots_obj_metadata {
-	/* Object Name */
-	char                   *name;
-
-	/* Object Type */
-	struct bt_ots_obj_type type;
-
-	/* Object Size */
-	struct bt_ots_obj_size size;
-
-	/* Object Properties */
-	uint32_t               props;
-};
 
 /** @brief Object Action Control Point Feature bits. */
 enum {
@@ -473,6 +471,48 @@ struct bt_ots_feat {
 /** @brief Opaque OTS instance. */
 struct bt_ots;
 
+/** @brief Descriptor for OTS object addition */
+struct bt_ots_obj_add_param {
+	/** @brief Object size to allocate */
+	uint32_t size;
+
+	/** @brief Object type */
+	struct bt_ots_obj_type type;
+};
+
+/** @brief Descriptor for OTS created object.
+ *
+ *  Descriptor for OTS object created by the application. This descriptor is
+ *  returned by @ref bt_ots_cb.obj_created callback which contains further
+ *  documentation on distinguishing between server and client object creation.
+ */
+struct bt_ots_obj_created_desc {
+	/** @brief Object name
+	 *
+	 *  The object name as a NULL terminated string.
+	 *
+	 *  When the server creates a new object the name
+	 *  shall be > 0 and <= BT_OTS_OBJ_MAX_NAME_LEN
+	 *  When the client creates a new object the name
+	 *  shall be an empty string
+	 */
+	char *name;
+
+	/** @brief Object size
+	 *
+	 *  @ref bt_ots_obj_size.alloc shall be >= @ref bt_ots_obj_add_param.size
+	 *
+	 *  When the server creates a new object @ref bt_ots_obj_size.cur
+	 *  shall be <= @ref bt_ots_obj_add_param.size
+	 *  When the client creates a new object @ref bt_ots_obj_size.cur
+	 *  shall be 0
+	 */
+	struct bt_ots_obj_size size;
+
+	/** @brief Object properties */
+	uint32_t props;
+};
+
 /** @brief OTS callback structure. */
 struct bt_ots_cb {
 	/** @brief Object created callback
@@ -483,20 +523,23 @@ struct bt_ots_cb {
 	 *  object. This callback is also triggered when the server
 	 *  creates a new object with bt_ots_obj_add() API.
 	 *
-	 *  @param ots  OTS instance.
-	 *  @param conn The connection that is requesting object creation or
-	 *              NULL if object is created by the following function:
-	 *              bt_ots_obj_add().
-	 *  @param id   Object ID.
-	 *  @param init Object initialization metadata.
+	 *  @param ots           OTS instance.
+	 *  @param conn          The connection that is requesting object creation or
+	 *                       NULL if object is created by bt_ots_obj_add().
+	 *  @param id            Object ID.
+	 *  @param add_param     Object creation requested parameters.
+	 *  @param created_desc  Created object descriptor that shall be filled by the
+	 *                       receiver of this callback.
 	 *
 	 *  @return 0 in case of success or negative value in case of error.
-	 *  Possible return values:
-	 *  -ENOMEM if no available space for new object.
+	 *  @return -ENOTSUP if object type is not supported
+	 *  @return -ENOMEM if no available space for new object.
+	 *  @return -EINVAL if an invalid parameter is provided
+	 *  @return other negative values are treated as a generic operation failure
 	 */
-	int (*obj_created)(struct bt_ots *ots, struct bt_conn *conn,
-			   uint64_t id,
-			   const struct bt_ots_obj_metadata *init);
+	int (*obj_created)(struct bt_ots *ots, struct bt_conn *conn, uint64_t id,
+			   const struct bt_ots_obj_add_param *add_param,
+			   struct bt_ots_obj_created_desc *created_desc);
 
 	/** @brief Object deleted callback
 	 *
@@ -508,9 +551,19 @@ struct bt_ots_cb {
 	 *  @param conn The connection that deleted the object or NULL if
 	 *              this request came from the server.
 	 *  @param id   Object ID.
+	 *
+	 *  @retval When an error is indicated by using a negative value, the
+	 *          object delete procedure is aborted and a corresponding failed
+	 *          status is returned to the client.
+	 *  @return 0 in case of success.
+	 *  @return -EBUSY if the object is locked. This is generally not expected
+	 *          to be returned by the application as the OTS layer tracks object
+	 *          accesses. An object locked status is returned to the client.
+	 *  @return Other negative values in case of error. A generic operation
+	 *          failed status is returned to the client.
 	 */
-	void (*obj_deleted)(struct bt_ots *ots, struct bt_conn *conn,
-			    uint64_t id);
+	int (*obj_deleted)(struct bt_ots *ots, struct bt_conn *conn,
+			   uint64_t id);
 
 	/** @brief Object selected callback
 	 *
@@ -541,10 +594,55 @@ struct bt_ots_cb {
 	 *
 	 *  @return Data length to be sent via data parameter. This value
 	 *          shall be smaller or equal to the len parameter.
+	 *  @return Negative value in case of an error.
 	 */
-	uint32_t (*obj_read)(struct bt_ots *ots, struct bt_conn *conn,
-			     uint64_t id, uint8_t **data, uint32_t len,
-			     uint32_t offset);
+	ssize_t (*obj_read)(struct bt_ots *ots, struct bt_conn *conn,
+			   uint64_t id, void **data, size_t len,
+			   off_t offset);
+
+	/** @brief Object write callback
+	 *
+	 *  This callback is called multiple times during the Object write
+	 *  operation. OTS module will keep providing successive Object
+	 *  fragments to the application until the write operation is
+	 *  completed. The offset and length of each write fragment is
+	 *  validated by the OTS module to be within the allocated size
+	 *  of the object. The remaining length indicates data length
+	 *  remaining to be written and will decrease each write iteration
+	 *  until it reaches 0 in the last write fragment.
+	 *
+	 *  @param ots    OTS instance.
+	 *  @param conn   The connection that wrote object.
+	 *  @param id     Object ID.
+	 *  @param data   Next chunk of data to be written.
+	 *  @param len    Length of the current chunk of data in the buffer.
+	 *  @param offset Object data offset.
+	 *  @param rem    Remaining length in the write operation.
+	 *
+	 *  @return Number of bytes written in case of success, if the number
+	 *          of bytes written does not match len, -EIO is returned to
+	 *          the L2CAP layer.
+	 *  @return A negative value in case of an error.
+	 *  @return -EINPROGRESS has a special meaning and is unsupported at
+	 *          the moment. It should not be returned.
+	 */
+	ssize_t (*obj_write)(struct bt_ots *ots, struct bt_conn *conn, uint64_t id,
+			     const void *data, size_t len, off_t offset,
+			     size_t rem);
+
+	/** @brief Object name written callback
+	 *
+	 *  This callback is called when the object name is written.
+	 *  This is a notification to the application that the object name
+	 *  has been updated by the OTS service implementation.
+	 *
+	 *  @param ots    OTS instance.
+	 *  @param conn   The connection that wrote object name.
+	 *  @param id     Object ID.
+	 *  @param name   Object name.
+	 */
+	void (*obj_name_written)(struct bt_ots *ots, struct bt_conn *conn,
+			     uint64_t id, const char *name);
 };
 
 /** @brief Descriptor for OTS initialization. */
@@ -563,11 +661,12 @@ struct bt_ots_init {
  *  to notify the user about a new object ID.
  *
  *  @param ots      OTS instance.
- *  @param obj_init Meta data of the object.
+ *  @param param    Object addition parameters.
  *
- *  @return 0 in case of success or negative value in case of error.
+ *  @return ID of created object in case of success.
+ *  @return negative value in case of error.
  */
-int bt_ots_obj_add(struct bt_ots *ots, struct bt_ots_obj_metadata *obj_init);
+int bt_ots_obj_add(struct bt_ots *ots, const struct bt_ots_obj_add_param *param);
 
 /** @brief Delete an object from the OTS instance.
  *

@@ -25,7 +25,7 @@ static bool host_present;
  */
 static void wait(void)
 {
-	if (k_is_in_isr()) {
+	if (!IS_ENABLED(CONFIG_MULTITHREADING) || k_is_in_isr()) {
 		if (IS_ENABLED(CONFIG_RTT_TX_RETRY_IN_INTERRUPT)) {
 			k_busy_wait(1000*CONFIG_RTT_TX_RETRY_DELAY_MS);
 		}
@@ -88,4 +88,4 @@ static int rtt_console_init(const struct device *d)
 	return 0;
 }
 
-SYS_INIT(rtt_console_init, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+SYS_INIT(rtt_console_init, PRE_KERNEL_1, CONFIG_CONSOLE_INIT_PRIORITY);

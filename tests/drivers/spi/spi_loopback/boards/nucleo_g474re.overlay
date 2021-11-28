@@ -4,9 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+&rcc {
+	/*
+	* Reduce bus clock speed to be able
+	* to reach SPI_LOOPBACK_SLOW_FREQ = 500000
+	* with max prescaler 256
+	*/
+	apb2-prescaler = <2>;
+};
+
 &spi1 {
-	dmas = <&dmamux1 0 11 0x20440 0
-		&dmamux1 8 10 0x20480 0>;
+	dmas = <&dmamux1 0 11 0x20440
+		&dmamux1 8 10 0x20480>;
 	dma-names = "tx", "rx";
 };
 
@@ -20,4 +29,12 @@
 
 &dmamux1 {
 	status = "okay";
+};
+
+&rcc {
+	/*
+	 * Reduce bus clock speed to be able to reach
+	 * SPI_LOOPBACK_SLOW_FREQ = 500000 with max prescaler 256
+	 */
+	apb2-prescaler = <2>;
 };

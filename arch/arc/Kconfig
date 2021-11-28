@@ -18,10 +18,7 @@ config CPU_ARCEM
 
 config CPU_ARCHS
 	bool
-	# FIXME: ATOMIC_OPERATIONS_BUILTIN still has some problem in arcmwdt
-	# toolchain, so choosing ATOMIC_OPERATIONS_C instead.
-	select ATOMIC_OPERATIONS_C if "$(ZEPHYR_TOOLCHAIN_VARIANT)" = "arcmwdt"
-	select ATOMIC_OPERATIONS_BUILTIN if "$(ZEPHYR_TOOLCHAIN_VARIANT)" != "arcmwdt"
+	select ATOMIC_OPERATIONS_BUILTIN
 	help
 	  This option signifies the use of an ARC HS CPU
 
@@ -38,6 +35,11 @@ config ISA_ARCV2
 	select USE_SWITCH_SUPPORTED
 	help
 	  v2 ISA for the ARC-HS & ARC-EM cores
+
+config ISA_ARCV3
+	bool "ARC ISA v3"
+	select USE_SWITCH
+	select USE_SWITCH_SUPPORTED
 
 endchoice
 
@@ -83,10 +85,33 @@ config CPU_HS3X
 
 endif #ISA_ARCV2
 
+if ISA_ARCV3
+
+config CPU_HS6X
+	bool
+	select CPU_ARCHS
+	select 64BIT
+	help
+	  If y, the SoC uses an ARC HS6x CPU
+
+endif #ISA_ARCV3
+
 config FP_FPU_DA
 	bool
 
 menu "ARC CPU Options"
+
+config ARC_HAS_ZOL
+	bool
+	depends on ISA_ARCV2
+	default y
+	help
+	  ARCv2 CPUs have ZOL hardware loop mechanism which the ARCv3 ISA drops.
+	  Architecturally ZOL provides
+	  - LPcc instruction
+	  - LP_COUNT core reg
+	  - LP_START, LP_END aux regs
+	  Disabling this option removes usage of ZOL regs from code
 
 config NUM_IRQ_PRIO_LEVELS
 	int "Number of supported interrupt priority levels"
@@ -111,6 +136,7 @@ config NUM_IRQS
 config RGF_NUM_BANKS
 	int "Number of General Purpose Register Banks"
 	depends on ARC_FIRQ
+	depends on NUM_IRQ_PRIO_LEVELS > 1
 	range 1 2
 	default 2
 	help
@@ -120,9 +146,15 @@ config RGF_NUM_BANKS
 	  If fast interrupts are supported but there is only 1
 	  register bank, the fast interrupt handler must save
 	  and restore general purpose registers.
+	  NOTE: it's required to have more than one interrupt priority level
+	  to use second register bank - otherwise all interrupts will use
+	  same register bank. Such configuration isn't supported in software
+	  and it is not beneficial from the performance point of view.
 
 config ARC_FIRQ
 	bool "FIRQ enable"
+	depends on ISA_ARCV2
+	depends on NUM_IRQ_PRIO_LEVELS > 1
 	default y
 	help
 	  Fast interrupts are supported (FIRQ). If FIRQ enabled, for interrupts
@@ -130,6 +162,10 @@ config ARC_FIRQ
 	  other regs will be saved according to the number of register bank;
 	  If FIRQ is disabled, the handle of interrupts with highest priority
 	  will be same with other interrupts.
+	  NOTE: we don't allow the configuration with FIRQ enabled and only one
+	  interrupt priority level (so all interrupts are FIRQ). Such
+	  configuration isn't supported in software and it is not beneficial
+	  from the performance point of view.
 
 config ARC_FIRQ_STACK
 	bool "Enable separate firq stack"
@@ -147,6 +183,7 @@ config ARC_FIRQ_STACK_SIZE
 
 config ARC_HAS_STACK_CHECKING
 	bool "ARC has STACK_CHECKING"
+	depends on ISA_ARCV2
 	default y
 	help
 	  ARC is configured with STACK_CHECKING which is a mechanism for
@@ -225,6 +262,7 @@ config CODE_DENSITY
 
 config ARC_HAS_ACCL_REGS
 	bool "Reg Pair ACCL:ACCH (FPU and/or MPY > 6)"
+	default y if CPU_HS3X
 	default y if FPU
 	help
 	  Depending on the configuration, CPU can contain accumulator reg-pair
@@ -233,6 +271,7 @@ config ARC_HAS_ACCL_REGS
 
 config ARC_HAS_SECURE
 	bool "ARC has SecureShield"
+	depends on ISA_ARCV2
 	select CPU_HAS_TEE
 	select ARCH_HAS_TRUSTED_EXECUTION
 	help
@@ -301,7 +340,8 @@ config DCACHE_LINE_SIZE
 
 config ARC_EXCEPTION_STACK_SIZE
 	int "ARC exception handling stack size"
-	default 768
+	default 768 if !64BIT
+	default 2048 if 64BIT
 	help
 	  Size in bytes of exception handling stack which is at the top of
 	  interrupt stack to get smaller memory footprint because exception
@@ -320,3 +360,30 @@ config ARC_EXCEPTION_DEBUG
 	  strings.
 
 endmenu
+
+config MAIN_STACK_SIZE
+	default 4096 if 64BIT
+
+config ISR_STACK_SIZE
+	default 4096 if 64BIT
+
+config SYSTEM_WORKQUEUE_STACK_SIZE
+	default 4096 if 64BIT
+
+config IDLE_STACK_SIZE
+	default 1024 if 64BIT
+
+config IPM_CONSOLE_STACK_SIZE
+	default 2048 if 64BIT
+
+config TEST_EXTRA_STACKSIZE
+	default 2048 if 64BIT
+
+config CMSIS_THREAD_MAX_STACK_SIZE
+	default 2048 if 64BIT
+
+config CMSIS_V2_THREAD_MAX_STACK_SIZE
+	default 2048 if 64BIT
+
+config CMSIS_V2_THREAD_DYNAMIC_STACK_SIZE
+	default 2048 if 64BIT

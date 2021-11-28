@@ -8,7 +8,7 @@
 #include <logging/log_backend_std.h>
 #include <logging/log_output.h>
 #include <openthread/platform/logging.h>
-#include <openthread/platform/uart.h>
+#include <utils/uart.h>
 #include <platform-zephyr.h>
 
 #ifndef CONFIG_LOG_BACKEND_SPINEL_BUFFER_SIZE
@@ -37,6 +37,15 @@ static void put(const struct log_backend *const backend,
 	last_log_level = msg->hdr.ids.level;
 
 	log_backend_std_put(&log_output_spinel, flag, msg);
+}
+
+static void process(const struct log_backend *const backend,
+		union log_msg2_generic *msg)
+{
+	/* prevent adding CRLF, which may crash spinel decoding */
+	uint32_t flags = LOG_OUTPUT_FLAG_CRLF_NONE | log_backend_std_get_flags();
+
+	log_output_msg2_process(&log_output_spinel, &msg->log, flags);
 }
 
 static void sync_string(const struct log_backend *const backend,
@@ -118,10 +127,11 @@ static int write(uint8_t *data, size_t length, void *ctx)
 }
 
 const struct log_backend_api log_backend_spinel_api = {
-	.put = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ? NULL : put,
-	.put_sync_string = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ?
+	.process = IS_ENABLED(CONFIG_LOG2) ? process : NULL,
+	.put = IS_ENABLED(CONFIG_LOG_MODE_DEFERRED) ? put : NULL,
+	.put_sync_string = IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE) ?
 			sync_string : NULL,
-	.put_sync_hexdump = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ?
+	.put_sync_hexdump = IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE) ?
 			sync_hexdump : NULL,
 	.panic = panic,
 	.init = log_backend_spinel_init,

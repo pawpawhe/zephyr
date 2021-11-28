@@ -214,7 +214,7 @@ logger.setLevel(logging.DEBUG)
 def size_report(sc):
     logger.info(sc.filename)
     logger.info("SECTION NAME             VMA        LMA     SIZE  HEX SZ TYPE")
-    for i in range(len(sc.sections)):
+    for i in enumerate(sc.sections):
         v = sc.sections[i]
 
         logger.info("%-17s 0x%08x 0x%08x %8d 0x%05x %-7s" %
@@ -621,6 +621,10 @@ structure in the main Zephyr tree: boards/<arch>/<board_name>/""")
         "-X", "--fixture", action="append", default=[],
         help="Specify a fixture that a board might support")
 
+    parser.add_argument(
+        "--device-serial-baud", action="store", default=None,
+        help="Serial device baud rate (default 115200)")
+
     serial = parser.add_mutually_exclusive_group()
     serial.add_argument("--device-serial",
                         help="""Serial device for accessing the board
@@ -631,6 +635,7 @@ structure in the main Zephyr tree: boards/<arch>/<board_name>/""")
                         help="""Script for controlling pseudoterminal.
                         Twister believes that it interacts with a terminal
                         when it actually interacts with the script.
+                        Not supported on Windows OS.
 
                         E.g "twister --device-testing
                         --device-serial-pty <script>
@@ -725,7 +730,7 @@ structure in the main Zephyr tree: boards/<arch>/<board_name>/""")
                              "--enable-coverage.")
 
     parser.add_argument("--coverage-platform", action="append", default=[],
-                        help="Plarforms to run coverage reports on. "
+                        help="Platforms to run coverage reports on. "
                              "This option may be used multiple times. "
                              "Default to what was selected with --platform.")
 
@@ -835,6 +840,10 @@ def main():
     if not options.coverage_platform:
         options.coverage_platform = options.platform
 
+    if options.device_serial_pty and os.name == "nt":  # OS is Windows
+        logger.error("--device-serial-pty is not supported on Windows OS")
+        sys.exit(1)
+
     if options.size:
         for fn in options.size:
             size_report(SizeCalculator(fn, []))
@@ -925,9 +934,11 @@ def main():
             if options.platform and len(options.platform) == 1:
                 if options.device_serial:
                     hwm.add_device(options.device_serial,
-                                                 options.platform[0],
-                                                 options.pre_script,
-                                                 False)
+                                   options.platform[0],
+                                   options.pre_script,
+                                   False,
+                                   baud=options.device_serial_baud
+                                   )
                 else:
                     hwm.add_device(options.device_serial_pty,
                                                  options.platform[0],
@@ -1146,10 +1157,16 @@ def main():
         else:
             suite.instances = OrderedDict(sorted(suite.instances.items()))
 
+        # Do calculation based on what is actually going to be run and evaluated
+        # at runtime, ignore the cases we already know going to be skipped.
+        # This fixes an issue where some sets would get majority of skips and
+        # basically run nothing beside filtering.
+        to_run = {k : v for k,v in suite.instances.items() if v.status is None}
+
         subset, sets = options.subset.split("/")
         subset = int(subset)
         sets = int(sets)
-        total = len(suite.instances)
+        total = len(to_run)
         per_set = int(total / sets)
         num_extra_sets = total - (per_set * sets)
 
@@ -1164,8 +1181,15 @@ def main():
             start = ((subset - num_extra_sets - 1) * per_set) + base
             end = start + per_set
 
-        sliced_instances = islice(suite.instances.items(), start, end)
+        sliced_instances = islice(to_run.items(), start, end)
+        skipped = {k : v for k,v in suite.instances.items() if v.status == 'skipped'}
+        errors = {k : v for k,v in suite.instances.items() if v.status == 'error'}
         suite.instances = OrderedDict(sliced_instances)
+        if subset == 1:
+            # add all pre-filtered tests that are skipped or got error status
+            # to the first set to allow for better distribution among all sets.
+            suite.instances.update(skipped)
+            suite.instances.update(errors)
 
     if options.save_tests:
         suite.csv_report(options.save_tests)
@@ -1215,6 +1239,7 @@ def main():
             except queue.Empty:
                 break
             else:
+                inst.metrics.update(suite.instances[inst.name].metrics)
                 inst.metrics["handler_time"] = inst.handler.duration if inst.handler else 0
                 inst.metrics["unrecognized"] = []
                 suite.instances[inst.name] = inst
@@ -1302,5 +1327,6 @@ if __name__ == "__main__":
     try:
         main()
     finally:
-        if os.isatty(1): # stdout is interactive
+        if (os.name != "nt") and os.isatty(1):
+            # (OS is not Windows) and (stdout is interactive)
             os.system("stty sane")

@@ -150,11 +150,11 @@ class Sign(Forceable):
         self.check_force(is_zephyr_build(build_dir),
                          "build directory {} doesn't look like a Zephyr build "
                          'directory'.format(build_dir))
-        bcfg = BuildConfiguration(build_dir)
+        build_conf = BuildConfiguration(build_dir)
 
         # Decide on output formats.
         formats = []
-        bin_exists = 'CONFIG_BUILD_OUTPUT_BIN' in bcfg
+        bin_exists = build_conf.getboolean('CONFIG_BUILD_OUTPUT_BIN')
         if args.gen_bin:
             self.check_force(bin_exists,
                              '--bin given but CONFIG_BUILD_OUTPUT_BIN not set '
@@ -164,10 +164,9 @@ class Sign(Forceable):
         elif args.gen_bin is None and bin_exists:
             formats.append('bin')
 
-        hex_exists = 'CONFIG_BUILD_OUTPUT_HEX' in bcfg
+        hex_exists = build_conf.getboolean('CONFIG_BUILD_OUTPUT_HEX')
         if args.gen_hex:
             self.check_force(hex_exists,
-
                              '--hex given but CONFIG_BUILD_OUTPUT_HEX not set '
                              "in build directory's ({}) .config".
                              format(build_dir))
@@ -184,7 +183,7 @@ class Sign(Forceable):
         else:
             raise RuntimeError("can't happen")
 
-        signer.sign(self, build_dir, bcfg, formats)
+        signer.sign(self, build_dir, build_conf, formats)
 
 
 class Signer(abc.ABC):
@@ -194,19 +193,19 @@ class Signer(abc.ABC):
     it in the Sign.do_run() method.'''
 
     @abc.abstractmethod
-    def sign(self, command, build_dir, bcfg, formats):
+    def sign(self, command, build_dir, build_conf, formats):
         '''Abstract method to perform a signature; subclasses must implement.
 
         :param command: the Sign instance
         :param build_dir: the build directory
-        :param bcfg: BuildConfiguration for build directory
+        :param build_conf: BuildConfiguration for build directory
         :param formats: list of formats to generate ('bin', 'hex')
         '''
 
 
 class ImgtoolSigner(Signer):
 
-    def sign(self, command, build_dir, bcfg, formats):
+    def sign(self, command, build_dir, build_conf, formats):
         if not formats:
             return
 
@@ -215,17 +214,17 @@ class ImgtoolSigner(Signer):
 
         imgtool = self.find_imgtool(command, args)
         # The vector table offset is set in Kconfig:
-        vtoff = self.get_cfg(command, bcfg, 'CONFIG_ROM_START_OFFSET')
+        vtoff = self.get_cfg(command, build_conf, 'CONFIG_ROM_START_OFFSET')
         # Flash device write alignment and the partition's slot size
         # come from devicetree:
         flash = self.edt_flash_node(b, args.quiet)
         align, addr, size = self.edt_flash_params(flash)
 
-        if bcfg.get('CONFIG_BOOTLOADER_MCUBOOT', 'n') != 'y':
+        if not build_conf.getboolean('CONFIG_BOOTLOADER_MCUBOOT'):
             log.wrn("CONFIG_BOOTLOADER_MCUBOOT is not set to y in "
-                    f"{bcfg.path}; this probably won't work")
+                    f"{build_conf.path}; this probably won't work")
 
-        kernel = bcfg.get('CONFIG_KERNEL_BIN_NAME', 'zephyr')
+        kernel = build_conf.get('CONFIG_KERNEL_BIN_NAME', 'zephyr')
 
         if 'bin' in formats:
             in_bin = b / 'zephyr' / f'{kernel}.bin'
@@ -303,9 +302,9 @@ class ImgtoolSigner(Signer):
         return [imgtool]
 
     @staticmethod
-    def get_cfg(command, bcfg, item):
+    def get_cfg(command, build_conf, item):
         try:
-            return bcfg[item]
+            return build_conf[item]
         except KeyError:
             command.check_force(
                 False, "build .config is missing a {} value".format(item))
@@ -391,20 +390,7 @@ class ImgtoolSigner(Signer):
 
 class RimageSigner(Signer):
 
-    @staticmethod
-    def edt_get_rimage_target(board):
-        if 'intel_adsp_cavs15' in board:
-            return 'apl'
-        if 'intel_adsp_cavs18' in board:
-            return 'cnl'
-        if 'intel_adsp_cavs20' in board:
-            return 'icl'
-        if 'intel_adsp_cavs25' in board:
-            return 'tgl'
-
-        log.die('Signing not supported for board ' + board)
-
-    def sign(self, command, build_dir, bcfg, formats):
+    def sign(self, command, build_dir, build_conf, formats):
         args = command.args
 
         if args.tool_path:
@@ -421,20 +407,27 @@ class RimageSigner(Signer):
         b = pathlib.Path(build_dir)
         cache = CMakeCache.from_build_dir(build_dir)
 
-        board = cache['CACHED_BOARD']
-        log.inf('Signing for board ' + board)
-        target = self.edt_get_rimage_target(board)
+        target = cache.get('RIMAGE_TARGET')
+        if not target:
+            log.die('rimage target not defined')
+
         conf = target + '.toml'
         log.inf('Signing for SOC target ' + target + ' using ' + conf)
 
         if not args.quiet:
             log.inf('Signing with tool {}'.format(tool_path))
 
-        bootloader = str(b / 'zephyr' / 'bootloader.elf.mod')
-        kernel = str(b / 'zephyr' / 'zephyr.elf.mod')
-        out_bin = str(b / 'zephyr' / 'zephyr.ri')
-        out_xman = str(b / 'zephyr' / 'zephyr.ri.xman')
-        out_tmp = str(b / 'zephyr' / 'zephyr.rix')
+        if target in ('imx8', 'imx8m'):
+            kernel = str(b / 'zephyr' / 'zephyr.elf')
+            out_bin = str(b / 'zephyr' / 'zephyr.ri')
+            out_xman = str(b / 'zephyr' / 'zephyr.ri.xman')
+            out_tmp = str(b / 'zephyr' / 'zephyr.rix')
+        else:
+            bootloader = str(b / 'zephyr' / 'bootloader.elf.mod')
+            kernel = str(b / 'zephyr' / 'zephyr.elf.mod')
+            out_bin = str(b / 'zephyr' / 'zephyr.ri')
+            out_xman = str(b / 'zephyr' / 'zephyr.ri.xman')
+            out_tmp = str(b / 'zephyr' / 'zephyr.rix')
         conf_path_cmd = []
         if cache.get('RIMAGE_CONFIG_PATH') and not args.tool_data:
             rimage_conf = pathlib.Path(cache['RIMAGE_CONFIG_PATH'])
@@ -452,9 +445,16 @@ class RimageSigner(Signer):
         else:
             no_manifest = False
 
+        if no_manifest:
+            extra_ri_args = ['-i', '3']
+        else:
+            extra_ri_args = ['-i', '3', '-e']
+
+        components = [ ] if (target in ('imx8', 'imx8m')) else [ bootloader ]
+        components += [ kernel ]
         sign_base = ([tool_path] + args.tool_args +
-                     ['-o', out_bin] +  conf_path_cmd + ['-i', '3', '-e'] +
-                     [bootloader, kernel])
+                     ['-o', out_bin] + conf_path_cmd + extra_ri_args +
+                     components)
 
         if not args.quiet:
             log.inf(quote_sh_list(sign_base))

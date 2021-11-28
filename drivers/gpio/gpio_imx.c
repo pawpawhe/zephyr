@@ -222,11 +222,11 @@ static const struct gpio_driver_api imx_gpio_driver_api = {
 									\
 	DEVICE_DT_INST_DEFINE(n,					\
 			    imx_gpio_##n##_init,			\
-			    device_pm_control_nop,			\
+			    NULL,					\
 			    &imx_gpio_##n##_data,			\
 			    &imx_gpio_##n##_config,			\
 			    POST_KERNEL,				\
-			    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,	\
+			    CONFIG_GPIO_INIT_PRIORITY,			\
 			    &imx_gpio_driver_api);			\
 									\
 	static int imx_gpio_##n##_init(const struct device *port)	\

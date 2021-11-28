@@ -9,10 +9,13 @@
 
 #include <sys/byteorder.h>
 #include <usb/usb_device.h>
-#include <usb/usb_common.h>
 
 /* Max packet size for endpoints */
+#if IS_ENABLED(CONFIG_USB_DC_HAS_HS_SUPPORT)
+#define BULK_EP_MPS		512
+#else
 #define BULK_EP_MPS		64
+#endif
 
 #define ENDP_BULK_IN		0x81
 
@@ -27,11 +30,11 @@ struct usb_device_desc {
 #define INITIALIZER_IF							\
 	{								\
 		.bLength = sizeof(struct usb_if_descriptor),		\
-		.bDescriptorType = USB_INTERFACE_DESC,			\
+		.bDescriptorType = USB_DESC_INTERFACE,			\
 		.bInterfaceNumber = 0,					\
 		.bAlternateSetting = 0,					\
 		.bNumEndpoints = 1,					\
-		.bInterfaceClass = CUSTOM_CLASS,			\
+		.bInterfaceClass = USB_BCC_VENDOR,			\
 		.bInterfaceSubClass = 0,				\
 		.bInterfaceProtocol = 0,				\
 		.iInterface = 0,					\
@@ -40,7 +43,7 @@ struct usb_device_desc {
 #define INITIALIZER_IF_EP(addr, attr, mps, interval)			\
 	{								\
 		.bLength = sizeof(struct usb_ep_descriptor),		\
-		.bDescriptorType = USB_ENDPOINT_DESC,			\
+		.bDescriptorType = USB_DESC_ENDPOINT,			\
 		.bEndpointAddress = addr,				\
 		.bmAttributes = attr,					\
 		.wMaxPacketSize = sys_cpu_to_le16(mps),			\

@@ -80,13 +80,6 @@ struct rf2xx_dt_gpio_t {
 	uint32_t flags;
 };
 
-struct rf2xx_dt_spi_t {
-	const char *devname;
-	uint32_t freq;
-	uint32_t addr;
-	struct rf2xx_dt_gpio_t cs;
-};
-
 struct rf2xx_config {
 	struct rf2xx_dt_gpio_t irq;
 	struct rf2xx_dt_gpio_t reset;
@@ -94,7 +87,7 @@ struct rf2xx_config {
 	struct rf2xx_dt_gpio_t dig2;
 	struct rf2xx_dt_gpio_t clkm;
 
-	struct rf2xx_dt_spi_t spi;
+	struct spi_dt_spec spi;
 
 	uint8_t inst;
 	uint8_t has_mac;
@@ -111,10 +104,6 @@ struct rf2xx_context {
 	const struct device *dig2_gpio;
 	const struct device *clkm_gpio;
 
-	const struct device *spi;
-	struct spi_config spi_cfg;
-	struct spi_cs_control spi_cs;
-
 	struct gpio_callback irq_cb;
 
 	struct k_thread trx_thread;
@@ -126,6 +115,7 @@ struct rf2xx_context {
 	enum rf2xx_trx_model_t trx_model;
 	enum rf2xx_trx_state_trac_t trx_trac;
 
+	enum ieee802154_tx_mode tx_mode;
 	uint8_t mac_addr[8];
 	uint8_t pkt_lqi;
 	uint8_t pkt_ed;

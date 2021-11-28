@@ -16,12 +16,12 @@ During very early boot, page tables are loaded so technically the kernel
 is executing in virtual address space. By default, physical and virtual
 memory are identity mapped and thus giving the appearance of execution
 taking place in physical address space. The physical address space is
-marked by kconfig :option:`CONFIG_SRAM_BASE_ADDRESS` and
-:option:`CONFIG_SRAM_SIZE` while the virtual address space is marked by
-:option:`CONFIG_KERNEL_VM_BASE` and :option:`CONFIG_KERNEL_VM_SIZE`.
-Note that :option:`CONFIG_SRAM_OFFSET` controls where the Zephyr kernel
+marked by kconfig :kconfig:`CONFIG_SRAM_BASE_ADDRESS` and
+:kconfig:`CONFIG_SRAM_SIZE` while the virtual address space is marked by
+:kconfig:`CONFIG_KERNEL_VM_BASE` and :kconfig:`CONFIG_KERNEL_VM_SIZE`.
+Note that :kconfig:`CONFIG_SRAM_OFFSET` controls where the Zephyr kernel
 is being placed in the memory, and its counterpart
-:option:`CONFIG_KERNEL_VM_OFFSET`.
+:kconfig:`CONFIG_KERNEL_VM_OFFSET`.
 
 Separate Virtual Address Space from Physical Address Space
 ==========================================================
@@ -34,26 +34,26 @@ space before ``vm_enter`` inside :file:`arch/x86/core/ia32/crt0.S`.
 After ``vm_enter``, code execution is done via virtual addresses
 and data can be referred via their virtual addresses. This is
 possible as the page table generation script
-(:file:`arch/x86/gen_mmu.py`) copies the mappings at the top level
-page table such that the same second level tables are used for both
-identity and virutal memory mappings.  Later in the boot process,
-the entries for identity mapping at the top level page table is
+(:file:`arch/x86/gen_mmu.py`) identity maps the physical addresses
+at the page directory level, in addition to mapping virtual addresses
+to the physical memory. Later in the boot process,
+the entries for identity mapping at the page directory level are
 cleared in :c:func:`z_x86_mmu_init()`, effectively removing
 the identity mapping of physical memory. This unmapping must be done
 for userspace isolation or else they would be able to access
 restricted memory via physical addresses. Since the identity mapping
-is done at the top level, there is no need to allocate additional
-space for lower level tables in the whole page table structure,
-or else the extra tables become wasted space once unmapped and
-no longer referred. Because of this, there are restrictions on
-where virtual address space can be:
+is done at the page directory level, there is no need to allocate
+additional space for the page table. However, additional space may
+still be required for additional page directory table.
+
+There are restrictions on where virtual address space can be:
 
 - Physical and virtual address spaces must be disjoint. This is
-  required as the entries in top level will be cleared.
+  required as the entries in page directory table will be cleared.
   If they are not disjoint, it would clear the entries needed for
   virtual addresses.
 
-  - If :option:`CONFIG_X86_PAE` is enabled (``=y``), each address space
+  - If :kconfig:`CONFIG_X86_PAE` is enabled (``=y``), each address space
     must reside in their own 1GB region, due to each entry of PDP
     (Page Directory Pointer) covers 1GB of memory. For example:
 
@@ -66,16 +66,12 @@ where virtual address space can be:
     - ``CONFIG_SRAM_BASE_ADDRESS == 0x00000000`` and
       ``CONFIG_KERNEL_VM_BASE = 0x20000000`` is not.
 
-  - If :option:`CONFIG_X86_PAE` is disabled (``=n``), each address space
+  - If :kconfig:`CONFIG_X86_PAE` is disabled (``=n``), each address space
     must reside in their own 4MB region, due to each entry of PD
     (Page Directory) covers 4MB of memory.
 
   - Both ``CONFIG_SRAM_BASE_ADDRESS`` and ``CONFIG_KERNEL_VM_BASE``
     must also align with the starting addresses of targeted regions.
-
-- Due to re-using of second level entries, both
-  ``CONFIG_SRAM_OFFSET`` and ``CONFIG_KERNEL_VM_OFFSET`` must be of
-  same value.
 
 Specifying Additional Memory Mappings at Build Time
 ***************************************************
@@ -112,6 +108,8 @@ The argument ``--map`` takes the following value:
 
   - ``X``: Allow execution.
 
+  - ``D``: Cache disabled.
+
     - Default is small page (4KB), supervisor only, read only, and
       execution disabled.
 
@@ -119,7 +117,7 @@ The argument ``--map`` takes the following value:
 
 Note that specifying additional memory mappings requires larger storage
 space for the pre-allocated page tables (both kernel and per-domain
-tables). :option:`CONFIG_X86_EXTRA_PAGE_TABLE_PAGES` is needed to
+tables). :kconfig:`CONFIG_X86_EXTRA_PAGE_TABLE_PAGES` is needed to
 specify how many more memory pages to be reserved for the page tables.
 If the needed space is not exactly the same as required space,
 the ``gen_mmu.py`` script will print out a message indicating what

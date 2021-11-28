@@ -9,7 +9,6 @@ comment "Optional modules. Make sure they're installed, via the project manifest
 
 source "modules/Kconfig.altera"
 source "modules/Kconfig.atmel"
-source "modules/Kconfig.canopennode"
 source "modules/Kconfig.civetweb"
 source "modules/Kconfig.cmsis"
 source "modules/Kconfig.cypress"
@@ -17,8 +16,6 @@ source "modules/Kconfig.eos_s3"
 source "modules/Kconfig.imx"
 source "modules/Kconfig.infineon"
 source "modules/Kconfig.libmetal"
-source "modules/Kconfig.loramac-node"
-source "modules/Kconfig.mbedtls"
 source "modules/Kconfig.mcux"
 source "modules/Kconfig.microchip"
 source "modules/Kconfig.nuvoton"
@@ -29,6 +26,7 @@ source "modules/Kconfig.sof"
 source "modules/Kconfig.st"
 source "modules/Kconfig.stm32"
 source "modules/Kconfig.syst"
+source "modules/Kconfig.telink"
 source "modules/Kconfig.tinycbor"
 source "modules/Kconfig.tinycrypt"
 source "modules/Kconfig.vega"
@@ -48,14 +46,32 @@ comment "Unavailable modules, please install those via the project manifest."
 # config ZEPHYR_<MODULE_NAME_UPPER>_MODULE
 # 	bool
 
+comment "hal_gigadevice module not available."
+	depends on !ZEPHYR_HAL_GIGADEVICE_MODULE
+
 comment "hal_nordic module not available."
 	depends on !ZEPHYR_HAL_NORDIC_MODULE
+
+comment "mbedtls module not available."
+	depends on !ZEPHYR_MBEDTLS_MODULE
 
 comment "Trusted-firmware-m module not available."
 	depends on !ZEPHYR_TRUSTED_FIRMWARE_M_MODULE
 
 comment "Nanopb module not available."
 	depends on !ZEPHYR_NANOPB_MODULE
+
+comment "Lz4 module not available."
+	depends on !ZEPHYR_LZ4_MODULE
+
+comment "loramac-node module not available."
+	depends on !ZEPHYR_LORAMAC_NODE_MODULE
+
+comment "CANopenNode module not available."
+	depends on !ZEPHYR_CANOPENNODE_MODULE
+
+comment "FFF module not available."
+	depends on !ZEPHYR_FFF_MODULE
 
 # This ensures that symbols are available in Kconfig for dependency checking
 # and referencing, while keeping the settings themselves unavailable when the

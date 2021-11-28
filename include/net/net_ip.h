@@ -62,6 +62,7 @@ extern "C" {
 enum net_ip_protocol {
 	IPPROTO_IP = 0,            /**< IP protocol (pseudo-val for setsockopt() */
 	IPPROTO_ICMP = 1,          /**< ICMP protocol   */
+	IPPROTO_IGMP = 2,          /**< IGMP protocol   */
 	IPPROTO_IPIP = 4,          /**< IPIP tunnels    */
 	IPPROTO_TCP = 6,           /**< TCP protocol    */
 	IPPROTO_UDP = 17,          /**< UDP protocol    */
@@ -143,6 +144,9 @@ struct in6_addr {
 	};
 };
 
+/* Binary size of the IPv6 address */
+#define NET_IPV6_ADDR_SIZE 16
+
 /** IPv4 address struct */
 struct in_addr {
 	union {
@@ -152,6 +156,9 @@ struct in_addr {
 		uint32_t s_addr; /* In big endian, for POSIX compatibility. */
 	};
 };
+
+/* Binary size of the IPv4 address */
+#define NET_IPV4_ADDR_SIZE 4
 
 /** Socket address family type */
 typedef unsigned short int sa_family_t;
@@ -389,6 +396,8 @@ extern const struct in6_addr in6addr_loopback;
 #define INADDR_ANY 0
 #define INADDR_ANY_INIT { { { INADDR_ANY } } }
 
+#define INADDR_LOOPBACK_INIT  { { { 127, 0, 0, 1 } } }
+
 /** @endcond */
 
 enum net_ip_mtu {
@@ -414,6 +423,8 @@ enum net_priority {
 	NET_PRIORITY_IC = 6, /**< Internetwork control               */
 	NET_PRIORITY_NC = 7  /**< Network control                    */
 } __packed;
+
+#define NET_MAX_PRIORITIES 8 /* How many priority values there are */
 
 /** IPv6/IPv4 network connection tuple */
 struct net_tuple {
@@ -455,8 +466,8 @@ struct net_ipv6_hdr {
 	uint16_t len;
 	uint8_t nexthdr;
 	uint8_t hop_limit;
-	struct in6_addr src;
-	struct in6_addr dst;
+	uint8_t src[NET_IPV6_ADDR_SIZE];
+	uint8_t dst[NET_IPV6_ADDR_SIZE];
 } __packed;
 
 struct net_ipv6_frag_hdr {
@@ -475,8 +486,8 @@ struct net_ipv4_hdr {
 	uint8_t ttl;
 	uint8_t proto;
 	uint16_t chksum;
-	struct in_addr src;
-	struct in_addr dst;
+	uint8_t src[NET_IPV4_ADDR_SIZE];
+	uint8_t dst[NET_IPV4_ADDR_SIZE];
 } __packed;
 
 struct net_icmp_hdr {
@@ -561,6 +572,10 @@ union net_proto_header {
 #define NET_IPV4UDPH_LEN   (NET_UDPH_LEN + NET_IPV4H_LEN) /* IPv4 + UDP */
 #define NET_IPV4TCPH_LEN   (NET_TCPH_LEN + NET_IPV4H_LEN) /* IPv4 + TCP */
 #define NET_IPV4ICMPH_LEN  (NET_IPV4H_LEN + NET_ICMPH_LEN) /* ICMPv4 + IPv4 */
+
+#define NET_IPV6H_LENGTH_OFFSET		0x04	/* Offset of the Length field in the IPv6 header */
+
+#define NET_IPV6_FRAGH_OFFSET_MASK	0xfff8	/* Mask for the 13-bit Fragment Offset field */
 
 /** @endcond */
 
@@ -725,6 +740,30 @@ static inline bool net_ipv4_is_ll_addr(const struct in_addr *addr)
 	UNALIGNED_PUT(UNALIGNED_GET(src), dest)
 
 /**
+ *  @brief Copy an IPv4 address raw buffer
+ *
+ *  @param dest Destination IP address.
+ *  @param src Source IP address.
+ */
+static inline void net_ipv4_addr_copy_raw(uint8_t *dest,
+					  const uint8_t *src)
+{
+	net_ipaddr_copy((struct in_addr *)dest, (const struct in_addr *)src);
+}
+
+/**
+ *  @brief Copy an IPv6 address raw buffer
+ *
+ *  @param dest Destination IP address.
+ *  @param src Source IP address.
+ */
+static inline void net_ipv6_addr_copy_raw(uint8_t *dest,
+					  const uint8_t *src)
+{
+	memcpy(dest, src, sizeof(struct in6_addr));
+}
+
+/**
  *  @brief Compare two IPv4 addresses
  *
  *  @param addr1 Pointer to IPv4 address.
@@ -739,6 +778,21 @@ static inline bool net_ipv4_addr_cmp(const struct in_addr *addr1,
 }
 
 /**
+ *  @brief Compare two raw IPv4 address buffers
+ *
+ *  @param addr1 Pointer to IPv4 address buffer.
+ *  @param addr2 Pointer to IPv4 address buffer.
+ *
+ *  @return True if the addresses are the same, false otherwise.
+ */
+static inline bool net_ipv4_addr_cmp_raw(const uint8_t *addr1,
+					 const uint8_t *addr2)
+{
+	return net_ipv4_addr_cmp((const struct in_addr *)addr1,
+				 (const struct in_addr *)addr2);
+}
+
+/**
  *  @brief Compare two IPv6 addresses
  *
  *  @param addr1 Pointer to IPv6 address.
@@ -750,6 +804,21 @@ static inline bool net_ipv6_addr_cmp(const struct in6_addr *addr1,
 				     const struct in6_addr *addr2)
 {
 	return !memcmp(addr1, addr2, sizeof(struct in6_addr));
+}
+
+/**
+ *  @brief Compare two raw IPv6 address buffers
+ *
+ *  @param addr1 Pointer to IPv6 address buffer.
+ *  @param addr2 Pointer to IPv6 address buffer.
+ *
+ *  @return True if the addresses are the same, false otherwise.
+ */
+static inline bool net_ipv6_addr_cmp_raw(const uint8_t *addr1,
+					 const uint8_t *addr2)
+{
+	return net_ipv6_addr_cmp((const struct in6_addr *)addr1,
+				 (const struct in6_addr *)addr2);
 }
 
 /**

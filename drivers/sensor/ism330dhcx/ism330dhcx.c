@@ -744,8 +744,7 @@ static const struct ism330dhcx_config ism330dhcx_config = {
 	.bus_init = ism330dhcx_spi_init,
 	.spi_conf.frequency = DT_INST_PROP(0, spi_max_frequency),
 	.spi_conf.operation = (SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
-			       SPI_MODE_CPHA | SPI_WORD_SET(8) |
-			       SPI_LINES_SINGLE),
+			       SPI_MODE_CPHA | SPI_WORD_SET(8)),
 	.spi_conf.slave     = DT_INST_REG_ADDR(0),
 #if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
 	.gpio_cs_port	    = DT_INST_SPI_DEV_CS_GPIOS_LABEL(0),
@@ -810,6 +809,6 @@ static int ism330dhcx_init(const struct device *dev)
 
 static struct ism330dhcx_data ism330dhcx_data;
 
-DEVICE_DT_INST_DEFINE(0, ism330dhcx_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, ism330dhcx_init, NULL,
 		    &ism330dhcx_data, &ism330dhcx_config, POST_KERNEL,
 		    CONFIG_SENSOR_INIT_PRIORITY, &ism330dhcx_api_funcs);

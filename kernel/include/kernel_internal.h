@@ -35,6 +35,25 @@ static inline void z_data_copy(void)
 	/* Do nothing */
 }
 #endif
+
+#ifdef CONFIG_LINKER_USE_BOOT_SECTION
+void z_bss_zero_boot(void);
+#else
+static inline void z_bss_zero_boot(void)
+{
+	/* Do nothing */
+}
+#endif
+
+#ifdef CONFIG_LINKER_USE_PINNED_SECTION
+void z_bss_zero_pinned(void);
+#else
+static inline void z_bss_zero_pinned(void)
+{
+	/* Do nothing */
+}
+#endif
+
 FUNC_NORETURN void z_cstart(void);
 
 void z_device_state_init(void);
@@ -117,19 +136,15 @@ z_thread_return_value_set_with_data(struct k_thread *thread,
 	thread->base.swap_data = data;
 }
 
+#ifdef CONFIG_SMP
 extern void z_smp_init(void);
-
 extern void smp_timer_init(void);
+#endif
 
 extern void z_early_boot_rand_get(uint8_t *buf, size_t length);
 
 #if CONFIG_STACK_POINTER_RANDOM
 extern int z_stack_adjust_initialized;
-#endif
-
-#ifdef CONFIG_BOOT_TIME_MEASUREMENT
-extern uint32_t z_timestamp_main; /* timestamp when main task starts */
-extern uint32_t z_timestamp_idle; /* timestamp when CPU goes idle */
 #endif
 
 extern struct k_thread z_main_thread;
@@ -138,7 +153,7 @@ extern struct k_thread z_main_thread;
 #ifdef CONFIG_MULTITHREADING
 extern struct k_thread z_idle_threads[CONFIG_MP_NUM_CPUS];
 #endif
-extern K_KERNEL_STACK_ARRAY_DEFINE(z_interrupt_stacks, CONFIG_MP_NUM_CPUS,
+K_KERNEL_PINNED_STACK_ARRAY_EXTERN(z_interrupt_stacks, CONFIG_MP_NUM_CPUS,
 				   CONFIG_ISR_STACK_SIZE);
 
 #ifdef CONFIG_GEN_PRIV_STACKS
@@ -199,8 +214,10 @@ void z_thread_mark_switched_out(void);
  */
 void z_mem_manage_init(void);
 
-/* Workaround for build-time page table mapping of the kernel */
-void z_kernel_map_fixup(void);
+/**
+ * @brief Finalize page frame management at the end of boot process.
+ */
+void z_mem_manage_boot_finish(void);
 
 #define LOCKED(lck) for (k_spinlock_key_t __i = {},			\
 					  __key = k_spin_lock(lck);	\
@@ -223,8 +240,10 @@ void z_kernel_map_fixup(void);
  *
  * This function is entered with interrupts disabled. It should re-enable
  * interrupts if it had entered a power state.
+ *
+ * @return True if the system suspended, otherwise return false
  */
-enum pm_state pm_system_suspend(int32_t ticks);
+bool pm_system_suspend(int32_t ticks);
 
 /**
  * Notify exit from kernel idling after PM operations

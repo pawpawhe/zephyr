@@ -4,7 +4,7 @@ zephyr_library()
 zephyr_library_link_libraries(subsys__bluetooth)
 
 zephyr_library_sources_ifdef(CONFIG_BT_HCI_RAW          hci_raw.c hci_common.c)
-zephyr_library_sources_ifdef(CONFIG_BT_DEBUG_MONITOR    monitor.c)
+zephyr_library_sources_ifdef(CONFIG_BT_MONITOR          monitor.c)
 zephyr_library_sources_ifdef(CONFIG_BT_TINYCRYPT_ECC    hci_ecc.c)
 zephyr_library_sources_ifdef(CONFIG_BT_A2DP             a2dp.c)
 zephyr_library_sources_ifdef(CONFIG_BT_AVDTP            avdtp.c)
@@ -77,6 +77,7 @@ if(CONFIG_BT_HCI_HOST)
   zephyr_library_sources_ifdef(
     CONFIG_BT_ISO
     iso.c
+    conn.c
     )
 
   if(CONFIG_BT_DF)
@@ -86,6 +87,11 @@ if(CONFIG_BT_HCI_HOST)
   endif()
 endif()
 
+if(CONFIG_BT_WHITELIST)
+  message(WARNING "CONFIG_BT_WHITELIST is deprecated.
+  Please use CONFIG_BT_FILTER_ACCEPT_LIST instead."
+    )
+endif()
 if(CONFIG_BT_DEBUG_SMP OR CONFIG_BT_DEBUG_KEYS OR CONFIG_BT_LOG_SNIFFER_INFO)
   message(WARNING "One of these options are enabled:
   CONFIG_BT_DEBUG_SMP CONFIG_BT_DEBUG_KEYS CONFIG_BT_LOG_SNIFFER_INFO.

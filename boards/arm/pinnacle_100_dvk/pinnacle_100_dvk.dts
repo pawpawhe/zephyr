@@ -116,7 +116,6 @@
 		mdm-wake-gpios = <&gpio1 13 0>;
 		mdm-pwr-on-gpios = <&gpio1 2 0>;
 		mdm-fast-shutd-gpios = <&gpio1 14 0>;
-		mdm-uart-dtr-gpios = <&gpio0 24 0>;
 		mdm-vgpio-gpios = <&gpio1 11 0>;
 		mdm-uart-dsr-gpios = <&gpio0 25 0>;
 		mdm-uart-cts-gpios = <&gpio0 15 0>;
@@ -127,8 +126,8 @@
 &i2c0 {
 	compatible = "nordic,nrf-twi";
 	status = "okay";
-	sda-gpios = <&gpio0 26 0>;
-	scl-gpios = <&gpio0 27 0>;
+	sda-pin = <26>;
+	scl-pin = <27>;
 
 	bme680@76 {
 		compatible = "bosch,bme680";
@@ -236,7 +235,7 @@
 	};
 };
 
-&usbd {
+zephyr_udc0: &usbd {
 	compatible = "nordic,nrf-usbd";
 	status = "okay";
 };

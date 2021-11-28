@@ -55,7 +55,11 @@ LOG_MODULE_REGISTER(net_pkt, CONFIG_NET_PKT_LOG_LEVEL);
  */
 #define MAX_IP_PROTO_LEN 8
 #else
+#if defined(CONFIG_NET_ETHERNET_BRIDGE)
+#define MAX_IP_PROTO_LEN 0
+#else
 #error "Either IPv6 or IPv4 needs to be selected."
+#endif /* ETHERNET_BRIDGE */
 #endif /* SOCKETS_CAN */
 #endif /* IPv4 */
 #endif /* IPv6 */
@@ -115,16 +119,16 @@ K_MEM_SLAB_DEFINE(tx_pkts, sizeof(struct net_pkt), CONFIG_NET_PKT_TX_COUNT, 4);
 #if defined(CONFIG_NET_BUF_FIXED_DATA_SIZE)
 
 NET_BUF_POOL_FIXED_DEFINE(rx_bufs, CONFIG_NET_BUF_RX_COUNT,
-			  CONFIG_NET_BUF_DATA_SIZE, NULL);
+			  CONFIG_NET_BUF_DATA_SIZE, 4, NULL);
 NET_BUF_POOL_FIXED_DEFINE(tx_bufs, CONFIG_NET_BUF_TX_COUNT,
-			  CONFIG_NET_BUF_DATA_SIZE, NULL);
+			  CONFIG_NET_BUF_DATA_SIZE, 4, NULL);
 
 #else /* !CONFIG_NET_BUF_FIXED_DATA_SIZE */
 
 NET_BUF_POOL_VAR_DEFINE(rx_bufs, CONFIG_NET_BUF_RX_COUNT,
-			CONFIG_NET_BUF_DATA_POOL_SIZE, NULL);
+			CONFIG_NET_BUF_DATA_POOL_SIZE, 4, NULL);
 NET_BUF_POOL_VAR_DEFINE(tx_bufs, CONFIG_NET_BUF_TX_COUNT,
-			CONFIG_NET_BUF_DATA_POOL_SIZE, NULL);
+			CONFIG_NET_BUF_DATA_POOL_SIZE, 4, NULL);
 
 #endif /* CONFIG_NET_BUF_FIXED_DATA_SIZE */
 
@@ -534,7 +538,7 @@ void net_pkt_unref(struct net_pkt *pkt)
 
 #if NET_LOG_LEVEL >= LOG_LEVEL_DBG
 #if CONFIG_NET_PKT_LOG_LEVEL >= LOG_LEVEL_DBG
-	NET_DBG("%s [%d] pkt %p ref %d frags %p (%s():%d)",
+	NET_DBG("%s [%d] pkt %p ref %ld frags %p (%s():%d)",
 		slab2str(pkt->slab), k_mem_slab_num_free_get(pkt->slab),
 		pkt, ref - 1, pkt->frags, caller, line);
 #endif
@@ -615,7 +619,7 @@ struct net_pkt *net_pkt_ref(struct net_pkt *pkt)
 	} while (!atomic_cas(&pkt->atomic_ref, ref, ref + 1));
 
 #if CONFIG_NET_PKT_LOG_LEVEL >= LOG_LEVEL_DBG
-	NET_DBG("%s [%d] pkt %p ref %d (%s():%d)",
+	NET_DBG("%s [%d] pkt %p ref %ld (%s():%d)",
 		slab2str(pkt->slab), k_mem_slab_num_free_get(pkt->slab),
 		pkt, ref + 1, caller, line);
 #endif
@@ -1089,6 +1093,36 @@ void net_pkt_trim_buffer(struct net_pkt *pkt)
 	}
 }
 
+int net_pkt_remove_tail(struct net_pkt *pkt, size_t length)
+{
+	struct net_buf *buf = pkt->buffer;
+	size_t remaining_len = net_pkt_get_len(pkt);
+
+	if (remaining_len < length) {
+		return -EINVAL;
+	}
+
+	remaining_len -= length;
+
+	while (buf) {
+		if (buf->len >= remaining_len) {
+			buf->len = remaining_len;
+
+			if (buf->frags) {
+				net_pkt_frag_unref(buf->frags);
+				buf->frags = NULL;
+			}
+
+			break;
+		}
+
+		remaining_len -= buf->len;
+		buf = buf->frags;
+	}
+
+	return 0;
+}
+
 #if NET_LOG_LEVEL >= LOG_LEVEL_DBG
 int net_pkt_alloc_buffer_debug(struct net_pkt *pkt,
 			       size_t size,
@@ -1182,10 +1216,18 @@ static struct net_pkt *pkt_alloc(struct k_mem_slab *slab, k_timeout_t timeout)
 #endif
 {
 	struct net_pkt *pkt;
+	uint32_t create_time;
 	int ret;
 
 	if (k_is_in_isr()) {
 		timeout = K_NO_WAIT;
+	}
+
+	if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS) ||
+	    IS_ENABLED(CONFIG_NET_PKT_TXTIME_STATS)) {
+		create_time = k_cycle_get_32();
+	} else {
+		ARG_UNUSED(create_time);
 	}
 
 	ret = k_mem_slab_alloc(slab, (void **)&pkt, timeout);
@@ -1222,17 +1264,7 @@ static struct net_pkt *pkt_alloc(struct k_mem_slab *slab, k_timeout_t timeout)
 
 	if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS) ||
 	    IS_ENABLED(CONFIG_NET_PKT_TXTIME_STATS)) {
-		struct net_ptp_time tp = {
-			/* Use the nanosecond field to temporarily
-			 * store the cycle count as it is a 32-bit
-			 * variable. The net_pkt timestamp field is used
-			 * to calculate how long it takes the packet to travel
-			 * between network device driver and application.
-			 */
-			.nanosecond = k_cycle_get_32(),
-		};
-
-		net_pkt_set_timestamp(pkt, &tp);
+		net_pkt_set_create_time(pkt, create_time);
 	}
 
 	net_pkt_set_vlan_tag(pkt, NET_VLAN_TAG_UNSPEC);
@@ -1741,6 +1773,7 @@ static void clone_pkt_attributes(struct net_pkt *pkt, struct net_pkt *clone_pkt)
 	net_pkt_set_priority(clone_pkt, net_pkt_priority(pkt));
 	net_pkt_set_orig_iface(clone_pkt, net_pkt_orig_iface(pkt));
 	net_pkt_set_captured(clone_pkt, net_pkt_is_captured(pkt));
+	net_pkt_set_l2_bridged(clone_pkt, net_pkt_is_l2_bridged(pkt));
 
 	if (IS_ENABLED(CONFIG_NET_IPV4) && net_pkt_family(pkt) == AF_INET) {
 		net_pkt_set_ipv4_ttl(clone_pkt, net_pkt_ipv4_ttl(pkt));
@@ -1758,6 +1791,21 @@ static void clone_pkt_attributes(struct net_pkt *pkt, struct net_pkt *clone_pkt)
 		net_pkt_set_ipv6_next_hdr(clone_pkt,
 					  net_pkt_ipv6_next_hdr(pkt));
 	}
+
+#if defined(CONFIG_IEEE802154)
+	net_pkt_set_ieee802154_rssi(clone_pkt, net_pkt_ieee802154_rssi(pkt));
+	net_pkt_set_ieee802154_lqi(clone_pkt, net_pkt_ieee802154_lqi(pkt));
+	net_pkt_set_ieee802154_arb(clone_pkt, net_pkt_ieee802154_arb(pkt));
+	net_pkt_set_ieee802154_ack_fpb(clone_pkt, net_pkt_ieee802154_ack_fpb(pkt));
+	net_pkt_set_ieee802154_frame_secured(clone_pkt, net_pkt_ieee802154_frame_secured(pkt));
+	net_pkt_set_ieee802154_mac_hdr_rdy(clone_pkt, net_pkt_ieee802154_mac_hdr_rdy(pkt));
+#if defined(CONFIG_IEEE802154_2015)
+	net_pkt_set_ieee802154_fv2015(clone_pkt, net_pkt_ieee802154_fv2015(pkt));
+	net_pkt_set_ieee802154_ack_seb(clone_pkt, net_pkt_ieee802154_ack_seb(pkt));
+	net_pkt_set_ieee802154_ack_fc(clone_pkt, net_pkt_ieee802154_ack_fc(pkt));
+	net_pkt_set_ieee802154_ack_keyid(clone_pkt, net_pkt_ieee802154_ack_keyid(pkt));
+#endif
+#endif
 }
 
 struct net_pkt *net_pkt_clone(struct net_pkt *pkt, k_timeout_t timeout)

@@ -8,7 +8,7 @@
 #include <zephyr.h>
 #include <device.h>
 #include <init.h>
-#include <power/power.h>
+#include <pm/pm.h>
 #include "retained.h"
 #include <hal/nrf_gpio.h>
 
@@ -66,17 +66,17 @@ void main(void)
 	k_busy_wait(BUSY_WAIT_S * USEC_PER_SEC);
 
 	printk("Busy-wait %u s with UART off\n", BUSY_WAIT_S);
-	rc = device_set_power_state(cons, DEVICE_PM_LOW_POWER_STATE, NULL, NULL);
+	rc = pm_device_action_run(cons, PM_DEVICE_ACTION_SUSPEND);
 	k_busy_wait(BUSY_WAIT_S * USEC_PER_SEC);
-	rc = device_set_power_state(cons, DEVICE_PM_ACTIVE_STATE, NULL, NULL);
+	rc = pm_device_action_run(cons, PM_DEVICE_ACTION_RESUME);
 
 	printk("Sleep %u s\n", SLEEP_S);
 	k_sleep(K_SECONDS(SLEEP_S));
 
 	printk("Sleep %u s with UART off\n", SLEEP_S);
-	rc = device_set_power_state(cons, DEVICE_PM_LOW_POWER_STATE, NULL, NULL);
+	rc = pm_device_action_run(cons, PM_DEVICE_ACTION_SUSPEND);
 	k_sleep(K_SECONDS(SLEEP_S));
-	rc = device_set_power_state(cons, DEVICE_PM_ACTIVE_STATE, NULL, NULL);
+	rc = pm_device_action_run(cons, PM_DEVICE_ACTION_RESUME);
 
 	printk("Entering system off; press BUTTON1 to restart\n");
 
@@ -90,8 +90,7 @@ void main(void)
 	 * controlled delay.  Here we need to override that, then
 	 * force entry to deep sleep on any delay.
 	 */
-	pm_power_state_force((struct pm_state_info){PM_STATE_SOFT_OFF, 0, 0});
-	k_sleep(K_MSEC(1));
+	pm_power_state_force(0u, (struct pm_state_info){PM_STATE_SOFT_OFF, 0, 0});
 
 	printk("ERROR: System off failed\n");
 	while (true) {

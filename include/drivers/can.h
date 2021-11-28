@@ -23,6 +23,7 @@
 #include <zephyr/types.h>
 #include <device.h>
 #include <string.h>
+#include <sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +34,22 @@ extern "C" {
 #define CAN_STD_ID_MASK CAN_MAX_STD_ID
 #define CAN_EXT_ID_MASK (0x1FFFFFFF)
 #define CAN_MAX_DLC    (8)
+#define CANFD_MAX_DLC  CONFIG_CANFD_MAX_DLC
+#ifndef CONFIG_CANFD_MAX_DLC
 #define CAN_MAX_DLEN    8
+#else
+#if CONFIG_CANFD_MAX_DLC <= 8
+#define CAN_MAX_DLEN    CONFIG_CANFD_MAX_DLC
+#elif CONFIG_CANFD_MAX_DLC <= 12
+#define CAN_MAX_DLEN    CONFIG_CANFD_MAX_DLC + (CONFIG_CANFD_MAX_DLC - 8) * 4
+#elif CONFIG_CANFD_MAX_DLC == 13
+#define CAN_MAX_DLEN 32
+#elif CONFIG_CANFD_MAX_DLC == 14
+#define CAN_MAX_DLEN 48
+#elif CONFIG_CANFD_MAX_DLC == 15
+#define CAN_MAX_DLEN 64
+#endif
+#endif /* CONFIG_CANFD_MAX_DLC */
 
 /* CAN_TX_* are the error flags from tx_callback and send.*/
 /** send successfully */
@@ -68,8 +84,7 @@ extern "C" {
 	K_MSGQ_DEFINE(name, sizeof(struct zcan_frame), size, 4)
 
 /**
- * @brief can_ide enum
- * Define if the message has a standard (11bit) or extended (29bit)
+ * @brief Define if the message has a standard (11bit) or extended (29bit)
  * identifier
  */
 enum can_ide {
@@ -78,8 +93,7 @@ enum can_ide {
 };
 
 /**
- * @brief can_rtr enum
- * Define if the message is a data or remote frame
+ * @brief Defines if the message is a data or remote frame
  */
 enum can_rtr {
 	CAN_DATAFRAME,
@@ -87,8 +101,7 @@ enum can_rtr {
 };
 
 /**
- * @brief can_mode enum
- * Defines the mode of the can controller
+ * @brief Defines the mode of the CAN controller
  */
 enum can_mode {
 	/*Normal mode*/
@@ -102,8 +115,7 @@ enum can_mode {
 };
 
 /**
- * @brief can_state enum
- * Defines the possible states of the CAN bus
+ * @brief Defines the possible states of the CAN bus
  */
 enum can_state {
 	CAN_ERROR_ACTIVE,
@@ -112,15 +124,22 @@ enum can_state {
 	CAN_BUS_UNKNOWN
 };
 
-/*
+/**
  * Controller Area Network Identifier structure for Linux compatibility.
  *
  * The fields in this type are:
  *
- * bit 0-28	: CAN identifier (11/29 bit)
- * bit 29	: error message frame flag (0 = data frame, 1 = error message)
- * bit 30	: remote transmission request flag (1 = rtr frame)
- * bit 31	: frame format flag (0 = standard 11 bit, 1 = extended 29 bit)
+ *     +------+--------------------------------------------------------------+
+ *     | Bits | Description                                                  |
+ *     +======+==============================================================+
+ *     | 0-28 | CAN identifier (11/29 bit)                                   |
+ *     +------+--------------------------------------------------------------+
+ *     |  29  | Error message frame flag (0 = data frame, 1 = error message) |
+ *     +------+--------------------------------------------------------------+
+ *     |  30  | Remote transmission request flag (1 = RTR frame)             |
+ *     +------+--------------------------------------------------------------+
+ *     |  31  | Frame format flag (0 = standard 11 bit, 1 = extended 29 bit) |
+ *     +------+--------------------------------------------------------------+
  */
 typedef uint32_t canid_t;
 
@@ -164,7 +183,6 @@ struct can_filter {
  *
  * Used to pass can messages from userspace to the driver and
  * from driver to userspace
- *
  */
 struct zcan_frame {
 	/** Message identifier*/
@@ -210,7 +228,7 @@ struct zcan_frame {
  * @brief CAN filter structure
  *
  * Used to pass can identifier filter information to the driver.
- * rtr_mask and *_id_mask are used to mask bits of the rtr and id fields.
+ * rtr_mask and *_id_mask are used to mask bits of the RTR and id fields.
  * If the mask bit is 0, the value of the corresponding bit in the id or rtr
  * field don't care for the filter matching.
  *
@@ -219,7 +237,7 @@ struct zcan_filter {
 	/** target state of the identifier */
 	uint32_t id           : 29;
 	uint32_t res0         : 1;
-	/** target state of the rtr bit */
+	/** target state of the RTR bit */
 	uint32_t rtr          : 1;
 	/** Indicates the identifier type (standard or extended)
 	 * use can_ide enum for assignment
@@ -228,13 +246,13 @@ struct zcan_filter {
 	/** identifier mask*/
 	uint32_t id_mask  : 29;
 	uint32_t res1         : 1;
-	/** rtr bit mask */
+	/** RTR bit mask */
 	uint32_t rtr_mask     : 1;
 	uint32_t res2         : 1;
 };
 
 /**
- * @brief can bus error count structure
+ * @brief CAN bus error count structure
  *
  * Used to pass the bus error counters to userspace
  */
@@ -243,9 +261,11 @@ struct can_bus_err_cnt {
 	uint8_t rx_err_cnt;
 };
 
+/** SWJ value to indicate that the SJW should not be changed */
+#define CAN_SJW_NO_CHANGE 0
 
 /**
- * @brief canbus timings
+ * @brief CAN bus timings
  *
  * Used to pass bus timing values to the config and bitrate calculator function.
  *
@@ -254,11 +274,13 @@ struct can_bus_err_cnt {
  * prop_seg and phase_seg1 affect the sampling-point in the same way and some
  * controllers only have a register for the sum of those two. The sync segment
  * always has a length of 1 tq
- * +---------+----------+------------+------------+
- * |sync_seg | prop_seg | phase_seg1 | phase_seg2 |
- * +---------+----------+------------+------------+
- *                                   ^
- *                             Sampling-Point
+ *
+ *     +---------+----------+------------+------------+
+ *     |sync_seg | prop_seg | phase_seg1 | phase_seg2 |
+ *     +---------+----------+------------+------------+
+ *                                       ^
+ *                                 Sampling-Point
+ *
  * 1 tq (time quantum) has the length of 1/(core_clock / prescaler)
  * The bitrate is defined by the core clock divided by the prescaler and the
  * sum of the segments.
@@ -279,6 +301,12 @@ struct can_timing {
 	/** Prescaler value */
 	uint16_t prescaler;
 };
+
+/**
+ * @cond INTERNAL_HIDDEN
+ *
+ * For internal use only, skip these in public documentation.
+ */
 
 /**
  * @typedef can_tx_callback_t
@@ -342,6 +370,9 @@ typedef void(*can_register_state_change_isr_t)(const struct device *dev,
 
 typedef int (*can_get_core_clock_t)(const struct device *dev, uint32_t *rate);
 
+typedef int (*can_get_max_filters_t)(const struct device *dev,
+				     enum can_ide id_type);
+
 #ifndef CONFIG_CAN_WORKQ_FRAMES_BUF_CNT
 #define CONFIG_CAN_WORKQ_FRAMES_BUF_CNT 4
 #endif
@@ -376,6 +407,7 @@ __subsystem struct can_driver_api {
 	can_get_state_t get_state;
 	can_register_state_change_isr_t register_state_change_isr;
 	can_get_core_clock_t get_core_clock;
+	can_get_max_filters_t get_max_filters;
 	/* Min values for the timing registers */
 	struct can_timing timing_min;
 	/* Max values for the timing registers */
@@ -389,11 +421,54 @@ __subsystem struct can_driver_api {
 };
 
 /**
+ * @endcond
+ */
+
+/**
+ * @brief Convert the DLC to the number of bytes
+ *
+ * This function converts a the Data Length Code to the number of bytes.
+ *
+ * @param dlc The Data Length Code
+ *
+ * @retval Number of bytes
+ */
+static inline uint8_t can_dlc_to_bytes(uint8_t dlc)
+{
+	static const uint8_t dlc_table[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12,
+					 16, 20, 24, 32, 48, 64};
+
+	return dlc > 0x0F ? 64 : dlc_table[dlc];
+}
+
+/**
+ * @brief Convert a number of bytes to the DLC
+ *
+ * This function converts a number of bytes to the Data Length Code
+ *
+ * @param num_bytes The number of bytes
+ *
+ * @retval The DLC
+ */
+
+static inline uint8_t can_bytes_to_dlc(uint8_t num_bytes)
+{
+	return num_bytes <= 8  ? num_bytes :
+	       num_bytes <= 12 ? 9 :
+	       num_bytes <= 16 ? 10 :
+	       num_bytes <= 20 ? 11 :
+	       num_bytes <= 24 ? 12 :
+	       num_bytes <= 32 ? 13 :
+	       num_bytes <= 48 ? 14 :
+	       15;
+}
+
+/**
  * @brief Perform data transfer to CAN bus.
  *
  * This routine provides a generic interface to perform data transfer
- * to the can bus. Use can_write() for simple write.
- * *
+ * to the CAN bus. Use can_write() for simple write.
+ *
  * @param dev          Pointer to the device structure for the driver instance.
  * @param msg          Message to transfer.
  * @param timeout      Waiting for empty tx mailbox timeout or K_FOREVER.
@@ -423,11 +498,11 @@ static inline int z_impl_can_send(const struct device *dev,
 }
 
 /*
- * Derived can APIs -- all implemented in terms of can_send()
+ * Derived CAN APIs -- all implemented in terms of can_send()
  */
 
 /**
- * @brief Write a set amount of data to the can bus.
+ * @brief Write a set amount of data to the CAN bus.
  *
  * This routine writes a set amount of data synchronously.
  *
@@ -526,7 +601,7 @@ __syscall int can_attach_msgq(const struct device *dev, struct k_msgq *msg_q,
  * If a message passes more than one filter the priority of the match
  * is hardware dependent.
  * A callback function can be attached to more than one filter.
- * *
+ *
  * @param dev          Pointer to the device structure for the driver instance.
  * @param isr          Callback function pointer.
  * @param callback_arg This will be passed whenever the isr is called.
@@ -552,7 +627,7 @@ static inline int can_attach_isr(const struct device *dev,
  *
  * This routine detaches an isr callback  or message queue from the identifier
  * filtering.
- * *
+ *
  * @param dev       Pointer to the device structure for the driver instance.
  * @param filter_id filter id returned by can_attach_isr or can_attach_msgq.
  *
@@ -588,6 +663,31 @@ static inline int z_impl_can_get_core_clock(const struct device *dev,
 		(const struct can_driver_api *)dev->api;
 
 	return api->get_core_clock(dev, rate);
+}
+
+/**
+ * @brief Retrieve maximum number of filters
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ * @param id_type CAN identifier type (standard or extended)
+ *
+ * @retval Number of maximum concurrent filters
+ * @retval -EIO General input / output error, failed to query device
+ * @retval -ENOSYS If this function is not implemented by the driver
+ */
+__syscall int can_get_max_filters(const struct device *dev, enum can_ide id_type);
+
+static inline int z_impl_can_get_max_filters(const struct device *dev,
+					     enum can_ide id_type)
+{
+	const struct can_driver_api *api =
+		(const struct can_driver_api *)dev->api;
+
+	if (api->get_max_filters == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->get_max_filters(dev, id_type);
 }
 
 /**
@@ -672,6 +772,8 @@ static inline int z_impl_can_set_mode(const struct device *dev,
 /**
  * @brief Configure timing of a host controller.
  *
+ * If the sjw equals CAN_SJW_NO_CHANGE, the sjw parameter is not changed.
+ *
  * The second parameter timing_data is only relevant for CAN-FD.
  * If the controller does not support CAN-FD or the FD mode is not enabled,
  * this parameter is ignored.
@@ -728,11 +830,15 @@ static inline int can_set_bitrate(const struct device *dev,
 		return -EINVAL;
 	}
 
+	timing.sjw = CAN_SJW_NO_CHANGE;
+
 #ifdef CONFIG_CAN_FD_MODE
 	ret = can_calc_timing_data(dev, &timing_data, bitrate_data, 875);
 	if (ret < 0) {
 		return -EINVAL;
 	}
+
+	timing_data.sjw = CAN_SJW_NO_CHANGE;
 
 	return can_set_timing(dev, &timing, &timing_data);
 #else

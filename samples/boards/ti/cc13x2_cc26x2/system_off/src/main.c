@@ -10,7 +10,7 @@
 #include <init.h>
 #include <device.h>
 #include <drivers/gpio.h>
-#include <power/power.h>
+#include <pm/pm.h>
 
 #include <driverlib/ioc.h>
 
@@ -67,8 +67,7 @@ void main(void)
 	/*
 	 * Force the SOFT_OFF state.
 	 */
-	pm_power_state_force((struct pm_state_info){PM_STATE_SOFT_OFF, 0, 0});
-	k_sleep(K_MSEC(1));
+	pm_power_state_force(0u, (struct pm_state_info){PM_STATE_SOFT_OFF, 0, 0});
 
 	printk("ERROR: System off failed\n");
 	while (true) {

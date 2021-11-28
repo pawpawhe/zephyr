@@ -39,7 +39,6 @@ child node, respectively.
 The following macros create or operate on node identifiers.
 
 .. doxygengroup:: devicetree-generic-id
-   :project: Zephyr
 
 .. _devicetree-property-access:
 
@@ -47,14 +46,30 @@ Property access
 ===============
 
 The following general-purpose macros can be used to access node properties.
-There are special-purpose APIs for accessing the :ref:`devicetree-reg-property`
-and :ref:`devicetree-interrupts-property`.
+There are special-purpose APIs for accessing the :ref:`devicetree-ranges-property`,
+:ref:`devicetree-reg-property` and :ref:`devicetree-interrupts-property`.
 
 Property values can be read using these macros even if the node is disabled,
 as long as it has a matching binding.
 
 .. doxygengroup:: devicetree-generic-prop
-   :project: Zephyr
+
+.. _devicetree-ranges-property:
+
+``ranges`` property
+===================
+
+Use these APIs instead of :ref:`devicetree-property-access` to access the
+``ranges`` property. Because this property's semantics are defined by the
+devicetree specification, these macros can be used even for nodes without
+matching bindings. However, they take on special semantics when the node's
+binding indicates it is a PCIe bus node, as defined in the
+`PCI Bus Binding to: IEEE Std 1275-1994 Standard for Boot (Initialization Configuration) Firmware`_
+
+.. _PCI Bus Binding to\: IEEE Std 1275-1994 Standard for Boot (Initialization Configuration) Firmware:
+    https://www.openfirmware.info/data/docs/bus.pci.pdf
+
+.. doxygengroup:: devicetree-ranges-prop
 
 .. _devicetree-reg-property:
 
@@ -67,7 +82,6 @@ devicetree specification, these macros can be used even for nodes without
 matching bindings.
 
 .. doxygengroup:: devicetree-reg-prop
-   :project: Zephyr
 
 .. _devicetree-interrupts-property:
 
@@ -82,7 +96,6 @@ some of these macros can be used even for nodes without matching bindings. This
 does not apply to macros which take cell names as arguments.
 
 .. doxygengroup:: devicetree-interrupts-prop
-   :project: Zephyr
 
 For-each macros
 ===============
@@ -96,7 +109,6 @@ There are special-purpose for-each macros, like
 be defined before use.
 
 .. doxygengroup:: devicetree-generic-foreach
-   :project: Zephyr
 
 Existence checks
 ================
@@ -108,7 +120,6 @@ properties, etc. Some macros used for special purposes (such as
 documented elsewhere on this page.
 
 .. doxygengroup:: devicetree-generic-exist
-   :project: Zephyr
 
 .. _devicetree-dep-ord:
 
@@ -146,7 +157,6 @@ There are instance number-based conveniences as well; see
 :c:func:`DT_INST_DEP_ORD` and subsequent documentation.
 
 .. doxygengroup:: devicetree-dep-ord
-   :project: Zephyr
 
 Bus helpers
 ===========
@@ -157,7 +167,6 @@ In this case, child nodes are considered to be on a bus of the given type, and
 the following APIs may be used.
 
 .. doxygengroup:: devicetree-generic-bus
-   :project: Zephyr
 
 .. _devicetree-inst-apis:
 
@@ -168,7 +177,7 @@ These are recommended for use within device drivers. To use them, define
 ``DT_DRV_COMPAT`` to the lowercase-and-underscores compatible the device driver
 implements support for. Here is an example devicetree fragment:
 
-.. code-block:: DTS
+.. code-block:: devicetree
 
    serial@40001000 {
            compatible = "vnd,serial";
@@ -207,7 +216,6 @@ Note that there are also helpers available for
 specific hardware; these are documented in :ref:`devicetree-hw-api`.
 
 .. doxygengroup:: devicetree-inst
-   :project: Zephyr
 
 .. _devicetree-hw-api:
 
@@ -224,7 +232,6 @@ These conveniences may be used for nodes which describe clock sources, and
 properties related to them.
 
 .. doxygengroup:: devicetree-clocks
-   :project: Zephyr
 
 DMA
 ===
@@ -233,7 +240,6 @@ These conveniences may be used for nodes which describe direct memory access
 controllers or channels, and properties related to them.
 
 .. doxygengroup:: devicetree-dmas
-   :project: Zephyr
 
 .. _devicetree-flash-api:
 
@@ -246,7 +252,6 @@ device tree. See :zephyr_file:`dts/bindings/mtd/partition.yaml` for this
 compatible's binding.
 
 .. doxygengroup:: devicetree-fixed-partition
-   :project: Zephyr
 
 .. _devicetree-gpio-api:
 
@@ -257,7 +262,6 @@ These conveniences may be used for nodes which describe GPIO controllers/pins,
 and properties related to them.
 
 .. doxygengroup:: devicetree-gpio
-   :project: Zephyr
 
 IO channels
 ===========
@@ -266,7 +270,36 @@ These are commonly used by device drivers which need to use IO
 channels (e.g. ADC or DAC channels) for conversion.
 
 .. doxygengroup:: devicetree-io-channels
-   :project: Zephyr
+
+.. _devicetree-pinctrl-api:
+
+Pinctrl (pin control)
+=====================
+
+These are used to access pin control properties by name or index.
+
+Devicetree nodes may have properties which specify pin control (sometimes known
+as pin mux) settings. These are expressed using ``pinctrl-<index>`` properties
+within the node, where the ``<index>`` values are contiguous integers starting
+from 0. These may also be named using the ``pinctrl-names`` property.
+
+Here is an example:
+
+.. code-block:: DTS
+
+   node {
+       ...
+       pinctrl-0 = <&foo &bar ...>;
+       pinctrl-1 = <&baz ...>;
+       pinctrl-names = "default", "sleep";
+   };
+
+Above, ``pinctrl-0`` has name ``"default"``, and ``pinctrl-1`` has name
+``"sleep"``. The ``pinctrl-<index>`` property values contain phandles. The
+``&foo``, ``&bar``, etc. phandles within the properties point to nodes whose
+contents vary by platform, and which describe a pin configuration for the node.
+
+.. doxygengroup:: devicetree-pinctrl
 
 PWM
 ===
@@ -275,7 +308,6 @@ These conveniences may be used for nodes which describe PWM controllers and
 properties related to them.
 
 .. doxygengroup:: devicetree-pwms
-   :project: Zephyr
 
 SPI
 ===
@@ -284,7 +316,6 @@ These conveniences may be used for nodes which describe either SPI controllers
 or devices, depending on the case.
 
 .. doxygengroup:: devicetree-spi
-   :project: Zephyr
 
 .. _devicetree-chosen-nodes:
 
@@ -324,25 +355,25 @@ device.
      - Selects the UART used for host communication in the
        :ref:`bluetooth-hci-uart-sample`
    * - zephyr,bt-mon-uart
-     - Sets default :option:`CONFIG_BT_MONITOR_ON_DEV_NAME`
+     - Sets UART device used for the Bluetooth monitor logging
    * - zephyr,bt-uart
-     - Sets default :option:`CONFIG_BT_UART_ON_DEV_NAME`
-   * - zephyr,can-primary
-     - Sets the primary CAN controller
+     - Sets UART device used by Bluetooth
+   * - zephyr,canbus
+     - Sets the default CAN controller
    * - zephyr,ccm
      - Core-Coupled Memory node on some STM32 SoCs
    * - zephyr,code-partition
      - Flash partition that the Zephyr image's text section should be linked
        into
    * - zephyr,console
-     - Sets default :option:`CONFIG_UART_CONSOLE_ON_DEV_NAME`
+     - Sets UART device used by console driver
    * - zephyr,dtcm
      - Data Tightly Coupled Memory node on some Arm SoCs
    * - zephyr,entropy
      - A device which can be used as a system-wide entropy source
    * - zephyr,flash
      - A node whose ``reg`` is sometimes used to set the defaults for
-       :option:`CONFIG_FLASH_BASE_ADDRESS` and :option:`CONFIG_FLASH_SIZE`
+       :kconfig:`CONFIG_FLASH_BASE_ADDRESS` and :kconfig:`CONFIG_FLASH_SIZE`
    * - zephyr,flash-controller
      - The node corresponding to the flash controller device for
        the ``zephyr,flash`` node
@@ -355,15 +386,19 @@ device.
        interprocess-communication (IPC)
    * - zephyr,itcm
      - Instruction Tightly Coupled Memory node on some Arm SoCs
+   * - zephyr,ot-uart
+     - Used by the OpenThread to specify UART device for Spinel protocol
+   * - zephyr,pcie-controller
+     - The node corresponding to the PCIe Controller
    * - zephyr,shell-uart
-     - Sets default :option:`CONFIG_UART_SHELL_ON_DEV_NAME`
+     - Sets UART device used by serial shell backend
    * - zephyr,sram
      - A node whose ``reg`` sets the base address and size of SRAM memory
        available to the Zephyr image, used during linking
    * - zephyr,uart-mcumgr
      - UART used for :ref:`device_mgmt`
    * - zephyr,uart-pipe
-     - Sets default :option:`CONFIG_UART_PIPE_ON_DEV_NAME`
+     - Sets default :kconfig:`CONFIG_UART_PIPE_ON_DEV_NAME`
    * - zephyr,usb-device
      - USB device node. If defined and has a ``vbus-gpios`` property, these
        will be used by the USB subsystem to enable/disable VBUS

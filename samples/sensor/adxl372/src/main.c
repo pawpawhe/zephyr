@@ -10,6 +10,10 @@
 
 #define pow2(x) ((x) * (x))
 
+#if !DT_HAS_COMPAT_STATUS_OKAY(adi_adxl372)
+#error "No adi,adxl372 compatible node found in the device tree"
+#endif
+
 static double sqrt(double value)
 {
 	int i;
@@ -29,7 +33,7 @@ static double sqrt(double value)
 K_SEM_DEFINE(sem, 0, 1);
 
 static void trigger_handler(const struct device *dev,
-			    struct sensor_trigger *trigger)
+			    const struct sensor_trigger *trigger)
 {
 	ARG_UNUSED(trigger);
 
@@ -48,10 +52,10 @@ void main(void)
 	int i;
 	char meter[200];
 
-	const struct device *dev = device_get_binding(DT_LABEL(DT_INST(0, adi_adxl372)));
+	const struct device *dev = DEVICE_DT_GET_ANY(adi_adxl372);
 
-	if (dev == NULL) {
-		printf("Could not get %s device\n", DT_LABEL(DT_INST(0, adi_adxl372)));
+	if (!device_is_ready(dev)) {
+		printf("Device %s is not ready\n", dev->name);
 		return;
 	}
 

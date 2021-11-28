@@ -14,8 +14,16 @@
 LOG_MODULE_REGISTER(sof);
 
 #include <ipc.h>
-#include <soc/shim.h>
+#include <cavs-shim.h>
+#include <cavs-mem.h>
 #include <adsp/io.h>
+
+/* This record was set up by the ROM/bootloader, don't touch to
+ * prevent races (though... nothing in our config layer actually
+ * ensures that the new window is at the same location as the old
+ * one...)
+ */
+#define SRAM_REG_FW_END (0x10 + (CONFIG_MP_NUM_CPUS * 4))
 
 /*
  * Sets up the host windows so that the host can see the memory
@@ -24,21 +32,20 @@ LOG_MODULE_REGISTER(sof);
 static void prepare_host_windows(void)
 {
 	/* window0, for fw status */
-	sys_write32((HP_SRAM_WIN0_SIZE | 0x7), DMWLO(0));
-	sys_write32((HP_SRAM_WIN0_BASE | DMWBA_READONLY | DMWBA_ENABLE),
-		    DMWBA(0));
+	CAVS_WIN[0].dmwlo = HP_SRAM_WIN0_SIZE | 0x7;
+	CAVS_WIN[0].dmwba = (HP_SRAM_WIN0_BASE | CAVS_DMWBA_READONLY
+			     | CAVS_DMWBA_ENABLE);
 	memset((void *)(HP_SRAM_WIN0_BASE + SRAM_REG_FW_END), 0,
 	      HP_SRAM_WIN0_SIZE - SRAM_REG_FW_END);
 	SOC_DCACHE_FLUSH((void *)(HP_SRAM_WIN0_BASE + SRAM_REG_FW_END),
 			 HP_SRAM_WIN0_SIZE - SRAM_REG_FW_END);
 
 	/* window3, for trace
-	 * zeroed by trace initialization
+	 * initialized in trace_out.c
 	 */
-	sys_write32((HP_SRAM_WIN3_SIZE | 0x7), DMWLO(3));
-	sys_write32((HP_SRAM_WIN3_BASE | DMWBA_READONLY | DMWBA_ENABLE),
-		    DMWBA(3));
-	memset((void *)HP_SRAM_WIN3_BASE, 0, HP_SRAM_WIN3_SIZE);
+	CAVS_WIN[3].dmwlo = HP_SRAM_WIN3_SIZE | 0x7;
+	CAVS_WIN[3].dmwba = (HP_SRAM_WIN3_BASE | CAVS_DMWBA_READONLY
+			     | CAVS_DMWBA_ENABLE);
 	SOC_DCACHE_FLUSH((void *)HP_SRAM_WIN3_BASE, HP_SRAM_WIN3_SIZE);
 }
 
@@ -49,5 +56,8 @@ static int adsp_init(const struct device *dev)
 	return 0;
 }
 
-/* Init after IPM initialization and before logging (uses memory windows) */
-SYS_INIT(adsp_init, PRE_KERNEL_2, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+/* Note priority zero: this is required for trace output to appear to
+ * the host (we can log to the buffer earlier, but the host needs our
+ * registers to see it), so we want it done FIRST.
+ */
+SYS_INIT(adsp_init, PRE_KERNEL_1, 0);

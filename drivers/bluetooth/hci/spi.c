@@ -77,7 +77,7 @@ static K_SEM_DEFINE(sem_initialised, 0, 1);
 static K_SEM_DEFINE(sem_request, 0, 1);
 static K_SEM_DEFINE(sem_busy, 1, 1);
 
-static K_KERNEL_STACK_DEFINE(spi_rx_stack, 256);
+static K_KERNEL_STACK_DEFINE(spi_rx_stack, 512);
 static struct k_thread spi_rx_thread_data;
 
 #if defined(CONFIG_BT_DEBUG_HCI_DRIVER)
@@ -130,8 +130,7 @@ static const struct device *spi_dev;
 
 static struct spi_config spi_conf = {
 	.frequency = DT_INST_PROP(0, spi_max_frequency),
-	.operation = (SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | SPI_WORD_SET(8) |
-		      SPI_LINES_SINGLE),
+	.operation = (SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | SPI_WORD_SET(8)),
 	.slave     = 0,
 	.cs        = NULL,
 };

@@ -17,3 +17,6 @@ supported:
   - i2c
   - spi
   - nvs
+  - dma
+  - usb_device
+  - lptim

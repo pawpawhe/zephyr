@@ -74,7 +74,6 @@
 };
 
 &uart1 {
-	compatible = "nordic,nrf-uart";
 	current-speed = <115200>;
 	status = "okay";
 	tx-pin = <33>;
@@ -84,8 +83,8 @@
 &i2c1 {
 	compatible = "nordic,nrf-twi";
 	status = "okay";
-	sda-gpios = <&gpio0 14 0>;
-	scl-gpios = <&gpio0 13 0>;
+	sda-pin = <14>;
+	scl-pin = <13>;
 
 	/* TI OPT3001 light sensor */
 	opt3001@44 {
@@ -170,7 +169,7 @@
 	};
 };
 
-&usbd {
+zephyr_udc0: &usbd {
 	compatible = "nordic,nrf-usbd";
 	status = "okay";
 };

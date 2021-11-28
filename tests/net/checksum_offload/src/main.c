@@ -163,17 +163,17 @@ static int eth_tx_offloading_disabled(const struct device *dev,
 		if (net_pkt_family(pkt) == AF_INET6) {
 			struct in6_addr addr;
 
-			net_ipaddr_copy(&addr, &NET_IPV6_HDR(pkt)->src);
-			net_ipaddr_copy(&NET_IPV6_HDR(pkt)->src,
-					&NET_IPV6_HDR(pkt)->dst);
-			net_ipaddr_copy(&NET_IPV6_HDR(pkt)->dst, &addr);
+			net_ipv6_addr_copy_raw((uint8_t *)&addr, NET_IPV6_HDR(pkt)->src);
+			net_ipv6_addr_copy_raw(NET_IPV6_HDR(pkt)->src,
+					       NET_IPV6_HDR(pkt)->dst);
+			net_ipv6_addr_copy_raw(NET_IPV6_HDR(pkt)->dst, (uint8_t *)&addr);
 		} else {
 			struct in_addr addr;
 
-			net_ipaddr_copy(&addr, &NET_IPV4_HDR(pkt)->src);
-			net_ipaddr_copy(&NET_IPV4_HDR(pkt)->src,
-					&NET_IPV4_HDR(pkt)->dst);
-			net_ipaddr_copy(&NET_IPV4_HDR(pkt)->dst, &addr);
+			net_ipv4_addr_copy_raw((uint8_t *)&addr, NET_IPV4_HDR(pkt)->src);
+			net_ipv4_addr_copy_raw(NET_IPV4_HDR(pkt)->src,
+					       NET_IPV4_HDR(pkt)->dst);
+			net_ipv4_addr_copy_raw(NET_IPV4_HDR(pkt)->dst, (uint8_t *)&addr);
 		}
 
 		udp_hdr = net_udp_get_hdr(pkt, &hdr);
@@ -290,17 +290,17 @@ static int eth_init(const struct device *dev)
 	return 0;
 }
 
-ETH_NET_DEVICE_INIT(eth_offloading_disabled_test,
-		    "eth_offloading_disabled_test",
-		    eth_init, device_pm_control_nop,
+ETH_NET_DEVICE_INIT(eth1_offloading_disabled_test,
+		    "eth1_offloading_disabled_test",
+		    eth_init, NULL,
 		    &eth_context_offloading_disabled, NULL,
 		    CONFIG_ETH_INIT_PRIORITY,
 		    &api_funcs_offloading_disabled,
 		    NET_ETH_MTU);
 
-ETH_NET_DEVICE_INIT(eth_offloading_enabled_test,
-		    "eth_offloading_enabled_test",
-		    eth_init, device_pm_control_nop,
+ETH_NET_DEVICE_INIT(eth0_offloading_enabled_test,
+		    "eth0_offloading_enabled_test",
+		    eth_init, NULL,
 		    &eth_context_offloading_enabled, NULL,
 		    CONFIG_ETH_INIT_PRIORITY,
 		    &api_funcs_offloading_enabled,

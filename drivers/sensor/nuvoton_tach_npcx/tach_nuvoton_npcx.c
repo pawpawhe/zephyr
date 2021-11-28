@@ -316,8 +316,7 @@ static int tach_npcx_init(const struct device *dev)
 {
 	const struct tach_npcx_config *const config = DRV_CONFIG(dev);
 	struct tach_npcx_data *const data = DRV_DATA(dev);
-	const struct device *const clk_dev =
-					device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	int ret;
 
 	/* Turn on device clock first and get source clock freq. */
@@ -380,7 +379,7 @@ static const struct sensor_driver_api tach_npcx_driver_api = {
 									       \
 	DEVICE_DT_INST_DEFINE(inst,                                            \
 			      tach_npcx_init,                                  \
-			      device_pm_control_nop,                           \
+			      NULL,                                            \
 			      &tach_data_##inst,                               \
 			      &tach_cfg_##inst,                                \
 			      POST_KERNEL,                                     \

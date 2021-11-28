@@ -914,17 +914,17 @@ static int tester_send(const struct device *dev, struct net_pkt *pkt)
 		if (net_pkt_family(pkt) == AF_INET6) {
 			struct in6_addr addr;
 
-			net_ipaddr_copy(&addr, &NET_IPV6_HDR(pkt)->src);
-			net_ipaddr_copy(&NET_IPV6_HDR(pkt)->src,
-					&NET_IPV6_HDR(pkt)->dst);
-			net_ipaddr_copy(&NET_IPV6_HDR(pkt)->dst, &addr);
+			net_ipv6_addr_copy_raw((uint8_t *)&addr, NET_IPV6_HDR(pkt)->src);
+			net_ipv6_addr_copy_raw(NET_IPV6_HDR(pkt)->src,
+					       NET_IPV6_HDR(pkt)->dst);
+			net_ipv6_addr_copy_raw(NET_IPV6_HDR(pkt)->dst, (uint8_t *)&addr);
 		} else {
 			struct in_addr addr;
 
-			net_ipaddr_copy(&addr, &NET_IPV4_HDR(pkt)->src);
-			net_ipaddr_copy(&NET_IPV4_HDR(pkt)->src,
-					&NET_IPV4_HDR(pkt)->dst);
-			net_ipaddr_copy(&NET_IPV4_HDR(pkt)->dst, &addr);
+			net_ipv4_addr_copy_raw((uint8_t *)&addr, NET_IPV4_HDR(pkt)->src);
+			net_ipv4_addr_copy_raw(NET_IPV4_HDR(pkt)->src,
+					       NET_IPV4_HDR(pkt)->dst);
+			net_ipv4_addr_copy_raw(NET_IPV4_HDR(pkt)->dst, (uint8_t *)&addr);
 		}
 
 		udp_hdr = net_udp_get_hdr(pkt, &hdr);
@@ -968,7 +968,7 @@ static struct dummy_api net_context_if_api = {
 #define _ETH_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(DUMMY_L2)
 
 NET_DEVICE_INIT(net_context_test, "net_context_test",
-		net_context_dev_init, device_pm_control_nop,
+		net_context_dev_init, NULL,
 		&net_context_data, NULL,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		&net_context_if_api, _ETH_L2_LAYER,
@@ -978,8 +978,9 @@ static void test_init(void)
 {
 	struct net_if_addr *ifaddr;
 	struct net_if_mcast_addr *maddr;
-	struct net_if *iface = net_if_get_default();
+	struct net_if *iface;
 
+	iface = net_if_get_first_by_type(&NET_L2_GET_NAME(DUMMY));
 	zassert_not_null(iface, "Interface is NULL");
 
 	ifaddr = net_if_ipv6_addr_add(iface, &in6addr_my,

@@ -14,6 +14,7 @@
 			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000010>;
 			interrupts = <17 0>;
 			interrupt-names = "global";
+			st,prescaler = <0>;
 			status = "disabled";
 			label = "TIMERS_6";
 		};
@@ -24,7 +25,18 @@
 			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000020>;
 			interrupts = <18 0>;
 			interrupt-names = "global";
+			st,prescaler = <0>;
 			status = "disabled";
 			label = "TIMERS_7";
 		};
+
+		dma1: dma@40020000 {
+			interrupts = <9 0 10 0 10 0 11 0 11 0 11 0 11 0>;
+			dma-requests = <7>;
+		};
+
+		dmamux1: dmamux@40020800 {
+			dma-channels = <7>;
+		};
+	};
 };

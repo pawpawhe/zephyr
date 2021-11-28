@@ -72,7 +72,6 @@ static int mcux_wwdt_disable(const struct device *dev)
 static int mcux_wwdt_install_timeout(const struct device *dev,
 				     const struct wdt_timeout_cfg *cfg)
 {
-	const struct mcux_wwdt_config *config = dev->config;
 	struct mcux_wwdt_data *data = dev->data;
 	uint32_t clock_freq;
 
@@ -81,8 +80,14 @@ static int mcux_wwdt_install_timeout(const struct device *dev,
 		return -ENOMEM;
 	}
 
+#if defined(CONFIG_SOC_MIMXRT685S_CM33)
+	clock_freq = CLOCK_GetWdtClkFreq(0);
+#else
+	const struct mcux_wwdt_config *config = dev->config;
+
 	CLOCK_SetClkDiv(kCLOCK_DivWdtClk, config->clk_divider, true);
 	clock_freq = CLOCK_GetWdtClkFreq();
+#endif
 
 	WWDT_GetDefaultConfig(&data->wwdt_config);
 
@@ -175,7 +180,7 @@ static const struct mcux_wwdt_config mcux_wwdt_config_0 = {
 static struct mcux_wwdt_data mcux_wwdt_data_0;
 
 DEVICE_DT_INST_DEFINE(0, &mcux_wwdt_init,
-		    device_pm_control_nop, &mcux_wwdt_data_0,
+		    NULL, &mcux_wwdt_data_0,
 		    &mcux_wwdt_config_0, POST_KERNEL,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &mcux_wwdt_api);

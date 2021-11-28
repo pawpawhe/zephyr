@@ -13,6 +13,11 @@
 
 #include "gpio_utils.h"
 
+#if CONFIG_GPIO_GECKO_COMMON_INIT_PRIORITY >= CONFIG_GPIO_INIT_PRIORITY
+#error CONFIG_GPIO_GECKO_COMMON_INIT_PRIORITY must be less than \
+	CONFIG_GPIO_INIT_PRIORITY.
+#endif
+
 /*
  * Macros to set the GPIO MODE registers
  *
@@ -284,7 +289,7 @@ static struct gpio_gecko_common_data gpio_gecko_common_data;
 
 DEVICE_DT_DEFINE(DT_INST(0, silabs_gecko_gpio),
 		    gpio_gecko_common_init,
-		    device_pm_control_nop,
+		    NULL,
 		    &gpio_gecko_common_data, &gpio_gecko_common_config,
 		    POST_KERNEL, CONFIG_GPIO_GECKO_COMMON_INIT_PRIORITY,
 		    &gpio_gecko_common_driver_api);
@@ -322,10 +327,10 @@ static struct gpio_gecko_data gpio_gecko_port##idx##_data; \
 \
 DEVICE_DT_INST_DEFINE(idx, \
 		    gpio_gecko_port##idx##_init, \
-		    device_pm_control_nop, \
+		    NULL, \
 		    &gpio_gecko_port##idx##_data, \
 		    &gpio_gecko_port##idx##_config, \
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, \
+		    POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY, \
 		    &gpio_gecko_driver_api); \
 \
 static int gpio_gecko_port##idx##_init(const struct device *dev) \

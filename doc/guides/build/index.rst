@@ -1,7 +1,57 @@
 .. _build_overview:
 
-Build Overview
-##############
+Build and Configuration Systems
+###############################
+
+
+.. _cmake-details:
+
+Build System (CMake)
+********************
+
+
+CMake is used to build your application together with the Zephyr kernel. A
+CMake build is done in two stages. The first stage is called
+**configuration**. During configuration, the CMakeLists.txt build scripts are
+executed. After configuration is finished, CMake has an internal model of the
+Zephyr build, and can generate build scripts that are native to the host
+platform.
+
+CMake supports generating scripts for several build systems, but only Ninja and
+Make are tested and supported by Zephyr. After configuration, you begin the
+**build** stage by executing the generated build scripts. These build scripts
+can recompile the application without involving CMake following
+most code changes. However, after certain changes, the configuration step must
+be executed again before building. The build scripts can detect some of these
+situations and reconfigure automatically, but there are cases when this must be
+done manually.
+
+Zephyr uses CMake's concept of a 'target' to organize the build. A
+target can be an executable, a library, or a generated file. For
+application developers, the library target is the most important to
+understand. All source code that goes into a Zephyr build does so by
+being included in a library target, even application code.
+
+Library targets have source code, that is added through CMakeLists.txt
+build scripts like this:
+
+.. code-block:: cmake
+
+   target_sources(app PRIVATE src/main.c)
+
+In the above :file:`CMakeLists.txt`, an existing library target named ``app``
+is configured to include the source file :file:`src/main.c`. The ``PRIVATE``
+keyword indicates that we are modifying the internals of how the library is
+being built. Using the keyword ``PUBLIC`` would modify how other
+libraries that link with app are built. In this case, using ``PUBLIC``
+would cause libraries that link with ``app`` to also include the
+source file :file:`src/main.c`, behavior that we surely do not want. The
+``PUBLIC`` keyword could however be useful when modifying the include
+paths of a target library.
+
+
+Build and Configuration Phases
+==============================
 
 The Zephyr build process can be divided into two main phases: a configuration
 phase (driven by CMake) and a build phase (driven by Make or Ninja).
@@ -9,7 +59,7 @@ phase (driven by CMake) and a build phase (driven by Make or Ninja).
 .. _build_configuration_phase:
 
 Configuration Phase
-*******************
+-------------------
 
 The configuration phase begins when the user invokes *CMake*,
 specifying a source application directory and a board target.
@@ -83,7 +133,7 @@ Kconfig
    See :ref:`the Kconfig section of the manual <kconfig>` for more information.
 
 Build Phase
-***********
+-----------
 
 The build phase begins when the user invokes ``make`` or ``ninja``. Its
 ultimate output is a complete Zephyr application in a format suitable for
@@ -93,7 +143,7 @@ into four stages: the pre-build, first-pass binary, final binary, and
 post-processing.
 
 Pre-build
-=========
++++++++++
 
 Pre-build occurs before any source files are compiled, because during
 this phase header files used by the source files are generated.
@@ -115,14 +165,23 @@ System call boilerplate
     :figclass: align-center
     :width: 80%
 
-First-pass binary
-=================
+Intermediate binaries
++++++++++++++++++++++
 
-Compilation proper begins with the first-pass binary. Source files (C
+Compilation proper begins with the first intermediate binary. Source files (C
 and assembly) are collected from various subsystems (which ones is
 decided during the configuration phase), and compiled into archives
 (with reference to header files in the tree, as well as those
-generated during the configuration phase and the pre-build stage).
+generated during the configuration phase and the pre-build stage(s)).
+
+.. figure:: build-build-phase-2.svg
+    :align: center
+    :alt: Zephyr's build stage II
+    :figclass: align-center
+    :width: 80%
+
+The exact number of intermediate binaries is decided during the configuration
+phase.
 
 If memory protection is enabled, then:
 
@@ -139,26 +198,78 @@ the configuration process, into a *linker.cmd* file. The compiled
 archives are then linked with *ld* as specified in the
 *linker.cmd*.
 
-In some configurations, this is the final binary, and the next stage
-is skipped.
+Unfixed size binary
+   The unfixed size intermediate binary is produced when :ref:`usermode_api`
+   is enabled or :ref:`devicetree` is in use.
+   It produces a binary where sizes are not fixed and thus it may be used
+   by post-process steps that will impact the size of the final binary.
 
-.. figure:: build-build-phase-2.svg
+.. figure:: build-build-phase-3.svg
     :align: center
-    :alt: Zephyr's build stage II
+    :alt: Zephyr's build stage III
     :figclass: align-center
     :width: 80%
 
-Final binary
-============
+Fixed size binary
+   The fixed size intermediate binary is produced when :ref:`usermode_api`
+   is enabled or when generated IRQ tables are used,
+   :kconfig:`CONFIG_GEN_ISR_TABLES`
+   It produces a binary where sizes are fixed and thus the size must not change
+   between the intermediate binary and the final binary.
 
-The binary from the previous stage is incomplete, with empty and/or
+.. figure:: build-build-phase-4.svg
+    :align: center
+    :alt: Zephyr's build stage IV
+    :figclass: align-center
+    :width: 80%
+
+Intermediate binaries post-processing
++++++++++++++++++++++++++++++++++++++
+
+The binaries from the previous stage are incomplete, with empty and/or
 placeholder sections that must be filled in by, essentially, reflection.
 
+To complete the build procedure the following scripts are executed on the
+intermediate binaries to produce the missing pieces needed for the final
+binary.
+
+When :ref:`usermode_api` is enabled:
+
+Partition alignment
+   The *gen_app_partitions.py* script scans the unfixed size binary and
+   generates an app shared memory aligned linker script snippet where the
+   partitions are sorted in descending order.
+
+.. figure:: build-postprocess-1.svg
+    :align: center
+    :alt: Zephyr's intermediate binary post-process I
+    :figclass: align-center
+    :width: 80%
+
+When :ref:`devicetree` is used:
+
 Device dependencies
-   The *gen_handles.py* script scans the first-pass binary to determine
+   The *gen_handles.py* script scans the unfixed size binary to determine
    relationships between devices that were recorded from devicetree data,
    and replaces the encoded relationships with values that are optimized to
    locate the devices actually present in the application.
+
+.. figure:: build-postprocess-2.svg
+    :align: center
+    :alt: Zephyr's intermediate binary post-process II
+    :figclass: align-center
+    :width: 80%
+
+When :kconfig:`CONFIG_GEN_ISR_TABLES` is enabled:
+   The *gen_isr_tables.py* script scant the fixed size binary and creates
+   an isr_tables.c source file with a hardware vector table and/or software
+   IRQ table.
+
+.. figure:: build-postprocess-3.svg
+    :align: center
+    :alt: Zephyr's intermediate binary post-process III
+    :figclass: align-center
+    :width: 80%
 
 When :ref:`usermode_api` is enabled:
 
@@ -169,26 +280,40 @@ Kernel object hashing
    table of those addresses, then that output is optimized by
    *process_gperf.py*, using known properties of our special case.
 
-Then, the link from the previous stage is repeated, this time with the
-missing pieces populated.
-
-.. figure:: build-build-phase-3.svg
+.. figure:: build-postprocess-4.svg
     :align: center
-    :alt: Zephyr's build stage III
+    :alt: Zephyr's intermediate binary post-process IV
     :figclass: align-center
     :width: 80%
 
+When no intermediate binary post-processing is required then the first
+intermediate binary will be directly used as the final binary.
+
+Final binary
+++++++++++++
+
+The binary from the previous stage is incomplete, with empty and/or
+placeholder sections that must be filled in by, essentially, reflection.
+
+The link from the previous stage is repeated, this time with the missing
+pieces populated.
+
+.. figure:: build-build-phase-5.svg
+    :align: center
+    :alt: Zephyr's build final stage
+    :figclass: align-center
+    :width: 80%
 
 Post processing
-===============
++++++++++++++++
 
 Finally, if necessary, the completed kernel is converted from *ELF* to
 the format expected by the loader and/or flash tool required by the
 target. This is accomplished in a straightforward manner with *objdump*.
 
-.. figure:: build-build-phase-4.svg
+.. figure:: build-build-phase-6.svg
     :align: center
-    :alt: Zephyr's build final stage
+    :alt: Zephyr's build final stage post-process
     :figclass: align-center
     :width: 80%
 
@@ -196,14 +321,14 @@ target. This is accomplished in a straightforward manner with *objdump*.
 .. _build_system_scripts:
 
 Supporting Scripts and Tools
-****************************
+============================
 
 The following is a detailed description of the scripts used during the build process.
 
 .. _gen_syscalls.py:
 
 :zephyr_file:`scripts/gen_syscalls.py`
-========================================
+--------------------------------------
 
 .. include:: ../../../scripts/gen_syscalls.py
    :start-after: """
@@ -212,7 +337,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _gen_handles.py:
 
 :zephyr_file:`scripts/gen_handles.py`
-==========================================
+--------------------------------------
 
 .. include:: ../../../scripts/gen_handles.py
    :start-after: """
@@ -221,7 +346,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _gen_kobject_list.py:
 
 :zephyr_file:`scripts/gen_kobject_list.py`
-==========================================
+------------------------------------------
 
 .. include:: ../../../scripts/gen_kobject_list.py
    :start-after: """
@@ -230,7 +355,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _gen_offset_header.py:
 
 :zephyr_file:`scripts/gen_offset_header.py`
-===========================================
+-------------------------------------------
 
 .. include:: ../../../scripts/gen_offset_header.py
    :start-after: """
@@ -239,7 +364,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _parse_syscalls.py:
 
 :zephyr_file:`scripts/parse_syscalls.py`
-========================================
+----------------------------------------
 
 
 .. include:: ../../../scripts/parse_syscalls.py
@@ -249,7 +374,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _gen_idt.py:
 
 :zephyr_file:`arch/x86/gen_idt.py`
-==================================
+----------------------------------
 
 .. include:: ../../../arch/x86/gen_idt.py
    :start-after: """
@@ -258,7 +383,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _gen_gdt.py:
 
 :zephyr_file:`arch/x86/gen_gdt.py`
-===================================
+----------------------------------
 
 .. include:: ../../../arch/x86/gen_gdt.py
    :start-after: """
@@ -267,7 +392,7 @@ The following is a detailed description of the scripts used during the build pro
 .. _gen_relocate_app.py:
 
 :zephyr_file:`scripts/gen_relocate_app.py`
-===========================================
+-------------------------------------------
 
 .. include:: ../../../scripts/gen_relocate_app.py
    :start-after: """
@@ -276,15 +401,50 @@ The following is a detailed description of the scripts used during the build pro
 .. _process_gperf.py:
 
 :zephyr_file:`scripts/process_gperf.py`
-========================================
+---------------------------------------
 
 .. include:: ../../../scripts/process_gperf.py
    :start-after: """
    :end-before: """
 
 :zephyr_file:`scripts/gen_app_partitions.py`
-============================================
+--------------------------------------------
 
 .. include:: ../../../scripts/gen_app_partitions.py
    :start-after: """
    :end-before: """
+
+.. _kconfig:
+
+Configuration System (Kconfig)
+*******************************
+
+The Zephyr kernel and subsystems can be configured at build time to adapt them
+for specific application and platform needs. Configuration is handled through
+Kconfig, which is the same configuration system used by the Linux kernel. The
+goal is to support configuration without having to change any source code.
+
+Configuration options (often called *symbols*) are defined in :file:`Kconfig`
+files, which also specify dependencies between symbols that determine what
+configurations are valid. Symbols can be grouped into menus and sub-menus to
+keep the interactive configuration interfaces organized.
+
+The output from Kconfig is a header file :file:`autoconf.h` with macros that
+can be tested at build time. Code for unused features can be compiled out to
+save space.
+
+The following sections explain how to set Kconfig configuration options, go
+into detail on how Kconfig is used within the Zephyr project, and have some
+tips and best practices for writing :file:`Kconfig` files.
+
+.. toctree::
+   :maxdepth: 1
+
+   kconfig/menuconfig.rst
+   kconfig/setting.rst
+   kconfig/tips.rst
+   kconfig/preprocessor-functions.rst
+   kconfig/extensions.rst
+
+Users interested in optimizing their configuraion for security should refer
+to the Zephyr Security Guide's section on the :ref:`hardening`.

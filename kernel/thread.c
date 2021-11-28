@@ -31,10 +31,6 @@
 #include <logging/log.h>
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
-#ifdef CONFIG_THREAD_RUNTIME_STATS
-k_thread_runtime_stats_t threads_runtime_stats;
-#endif
-
 #ifdef CONFIG_THREAD_MONITOR
 /* This lock protects the linked list of active threads; i.e. the
  * initial _kernel.threads pointer and the linked list made up of
@@ -44,7 +40,7 @@ static struct k_spinlock z_thread_monitor_lock;
 #endif /* CONFIG_THREAD_MONITOR */
 
 #define _FOREACH_STATIC_THREAD(thread_data)              \
-	Z_STRUCT_SECTION_FOREACH(_static_thread_data, thread_data)
+	STRUCT_SECTION_FOREACH(_static_thread_data, thread_data)
 
 void k_thread_foreach(k_thread_user_cb_t user_cb, void *user_data)
 {
@@ -61,9 +57,15 @@ void k_thread_foreach(k_thread_user_cb_t user_cb, void *user_data)
 	 * k_thread_abort from user_cb.
 	 */
 	key = k_spin_lock(&z_thread_monitor_lock);
+
+	SYS_PORT_TRACING_FUNC_ENTER(k_thread, foreach);
+
 	for (thread = _kernel.threads; thread; thread = thread->next_thread) {
 		user_cb(thread, user_data);
 	}
+
+	SYS_PORT_TRACING_FUNC_EXIT(k_thread, foreach);
+
 	k_spin_unlock(&z_thread_monitor_lock, key);
 #endif
 }
@@ -77,11 +79,17 @@ void k_thread_foreach_unlocked(k_thread_user_cb_t user_cb, void *user_data)
 	__ASSERT(user_cb != NULL, "user_cb can not be NULL");
 
 	key = k_spin_lock(&z_thread_monitor_lock);
+
+	SYS_PORT_TRACING_FUNC_ENTER(k_thread, foreach_unlocked);
+
 	for (thread = _kernel.threads; thread; thread = thread->next_thread) {
 		k_spin_unlock(&z_thread_monitor_lock, key);
 		user_cb(thread, user_data);
 		key = k_spin_lock(&z_thread_monitor_lock);
 	}
+
+	SYS_PORT_TRACING_FUNC_EXIT(k_thread, foreach_unlocked);
+
 	k_spin_unlock(&z_thread_monitor_lock, key);
 #endif
 }
@@ -119,45 +127,6 @@ bool z_is_thread_essential(void)
 {
 	return (_current->base.user_options & K_ESSENTIAL) == K_ESSENTIAL;
 }
-
-#ifdef CONFIG_SYS_CLOCK_EXISTS
-void z_impl_k_busy_wait(uint32_t usec_to_wait)
-{
-	if (usec_to_wait == 0U) {
-		return;
-	}
-
-#if !defined(CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT)
-	uint32_t start_cycles = k_cycle_get_32();
-
-	/* use 64-bit math to prevent overflow when multiplying */
-	uint32_t cycles_to_wait = (uint32_t)(
-		(uint64_t)usec_to_wait *
-		(uint64_t)sys_clock_hw_cycles_per_sec() /
-		(uint64_t)USEC_PER_SEC
-	);
-
-	for (;;) {
-		uint32_t current_cycles = k_cycle_get_32();
-
-		/* this handles the rollover on an unsigned 32-bit value */
-		if ((current_cycles - start_cycles) >= cycles_to_wait) {
-			break;
-		}
-	}
-#else
-	arch_busy_wait(usec_to_wait);
-#endif /* CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT */
-}
-
-#ifdef CONFIG_USERSPACE
-static inline void z_vrfy_k_busy_wait(uint32_t usec_to_wait)
-{
-	z_impl_k_busy_wait(usec_to_wait);
-}
-#include <syscalls/k_busy_wait_mrsh.c>
-#endif /* CONFIG_USERSPACE */
-#endif /* CONFIG_SYS_CLOCK_EXISTS */
 
 #ifdef CONFIG_THREAD_CUSTOM_DATA
 void z_impl_k_thread_custom_data_set(void *value)
@@ -224,11 +193,16 @@ int z_impl_k_thread_name_set(struct k_thread *thread, const char *value)
 
 	strncpy(thread->name, value, CONFIG_THREAD_MAX_NAME_LEN);
 	thread->name[CONFIG_THREAD_MAX_NAME_LEN - 1] = '\0';
-	sys_trace_thread_name_set(thread);
+
+	SYS_PORT_TRACING_OBJ_FUNC(k_thread, name_set, thread, 0);
+
 	return 0;
 #else
 	ARG_UNUSED(thread);
 	ARG_UNUSED(value);
+
+	SYS_PORT_TRACING_OBJ_FUNC(k_thread, name_set, thread, -ENOSYS);
+
 	return -ENOSYS;
 #endif /* CONFIG_THREAD_NAME */
 }
@@ -289,27 +263,24 @@ const char *k_thread_state_str(k_tid_t thread_id)
 	switch (thread_id->base.thread_state) {
 	case 0:
 		return "";
-		break;
 	case _THREAD_DUMMY:
 		return "dummy";
-		break;
 	case _THREAD_PENDING:
 		return "pending";
-		break;
 	case _THREAD_PRESTART:
 		return "prestart";
-		break;
 	case _THREAD_DEAD:
 		return "dead";
-		break;
 	case _THREAD_SUSPENDED:
 		return "suspended";
-		break;
 	case _THREAD_ABORTING:
 		return "aborting";
-		break;
 	case _THREAD_QUEUED:
 		return "queued";
+	default:
+	/* Add a break, some day when another case gets added at the end,
+	 * this bit of defensive programming will be useful
+	 */
 		break;
 	}
 	return "unknown";
@@ -350,6 +321,7 @@ static inline int z_vrfy_k_thread_name_copy(k_tid_t thread,
 #endif /* CONFIG_USERSPACE */
 
 
+#ifdef CONFIG_MULTITHREADING
 #ifdef CONFIG_STACK_SENTINEL
 /* Check that the stack sentinel is still present
  *
@@ -381,11 +353,12 @@ void z_check_stack_sentinel(void)
 		z_except_reason(K_ERR_STACK_CHK_FAIL);
 	}
 }
-#endif
+#endif /* CONFIG_STACK_SENTINEL */
 
-#ifdef CONFIG_MULTITHREADING
 void z_impl_k_thread_start(struct k_thread *thread)
 {
+	SYS_PORT_TRACING_OBJ_FUNC(k_thread, start, thread);
+
 	z_sched_start(thread);
 }
 
@@ -522,8 +495,6 @@ static char *setup_thread_stack(struct k_thread *new_thread,
 	return stack_ptr;
 }
 
-#define THREAD_COOKIE	0x1337C0D3
-
 /*
  * The provided stack_size value is presumed to be either the result of
  * K_THREAD_STACK_SIZEOF(stack), or the size value passed to the instance
@@ -605,7 +576,11 @@ char *z_setup_new_thread(struct k_thread *new_thread,
 	}
 #endif
 #ifdef CONFIG_SCHED_CPU_MASK
-	new_thread->base.cpu_mask = -1;
+	if (IS_ENABLED(CONFIG_SCHED_CPU_MASK_PIN_ONLY)) {
+		new_thread->base.cpu_mask = 1; /* must specify only one cpu */
+	} else {
+		new_thread->base.cpu_mask = -1; /* allow all cpus */
+	}
 #endif
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
 	/* _current may be null if the dummy thread is not used */
@@ -625,11 +600,8 @@ char *z_setup_new_thread(struct k_thread *new_thread,
 	new_thread->base.prio_deadline = 0;
 #endif
 	new_thread->resource_pool = _current->resource_pool;
-	sys_trace_thread_create(new_thread);
 
-#ifdef CONFIG_THREAD_RUNTIME_STATS
-	memset(&new_thread->rt_stats, 0, sizeof(new_thread->rt_stats));
-#endif
+	SYS_PORT_TRACING_OBJ_FUNC(k_thread, create, new_thread);
 
 	return stack_ptr;
 }
@@ -733,7 +705,7 @@ k_tid_t z_vrfy_k_thread_create(struct k_thread *new_thread,
 
 static void grant_static_access(void)
 {
-	Z_STRUCT_SECTION_FOREACH(z_object_assignment, pos) {
+	STRUCT_SECTION_FOREACH(z_object_assignment, pos) {
 		for (int i = 0; pos->objects[i] != NULL; i++) {
 			k_object_access_grant(pos->objects[i],
 					      pos->thread);
@@ -809,6 +781,8 @@ void z_init_thread_base(struct _thread_base *thread_base, int priority,
 FUNC_NORETURN void k_thread_user_mode_enter(k_thread_entry_t entry,
 					    void *p1, void *p2, void *p3)
 {
+	SYS_PORT_TRACING_FUNC(k_thread, user_mode_enter);
+
 	_current->base.user_options |= K_USER;
 	z_thread_essential_clear();
 #ifdef CONFIG_THREAD_MONITOR
@@ -1024,67 +998,27 @@ static inline k_ticks_t z_vrfy_k_thread_timeout_expires_ticks(
 #ifdef CONFIG_INSTRUMENT_THREAD_SWITCHING
 void z_thread_mark_switched_in(void)
 {
-#ifdef CONFIG_TRACING
-	sys_trace_thread_switched_in();
+#if defined(CONFIG_SCHED_THREAD_USAGE) && !defined(CONFIG_USE_SWITCH)
+	z_sched_usage_start(_current);
 #endif
 
-#ifdef CONFIG_THREAD_RUNTIME_STATS
-	struct k_thread *thread;
-
-	thread = k_current_get();
-#ifdef CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS
-	thread->rt_stats.last_switched_in = timing_counter_get();
-#else
-	thread->rt_stats.last_switched_in = k_cycle_get_32();
-#endif /* CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS */
-
-#endif /* CONFIG_THREAD_RUNTIME_STATS */
+#ifdef CONFIG_TRACING
+	SYS_PORT_TRACING_FUNC(k_thread, switched_in);
+#endif
 }
 
 void z_thread_mark_switched_out(void)
 {
-#ifdef CONFIG_THREAD_RUNTIME_STATS
-#ifdef CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS
-	timing_t now;
-#else
-	uint32_t now;
-#endif /* CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS */
-
-	uint64_t diff;
-	struct k_thread *thread;
-
-	thread = k_current_get();
-
-	if (unlikely(thread->rt_stats.last_switched_in == 0)) {
-		/* Has not run before */
-		return;
-	}
-
-	if (unlikely(thread->base.thread_state == _THREAD_DUMMY)) {
-		/* dummy thread has no stat struct */
-		return;
-	}
-
-#ifdef CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS
-	now = timing_counter_get();
-	diff = timing_cycles_get(&thread->rt_stats.last_switched_in, &now);
-#else
-	now = k_cycle_get_32();
-	diff = (uint64_t)now - thread->rt_stats.last_switched_in;
-	thread->rt_stats.last_switched_in = 0;
-#endif /* CONFIG_THREAD_RUNTIME_STATS_USE_TIMING_FUNCTIONS */
-
-	thread->rt_stats.stats.execution_cycles += diff;
-
-	threads_runtime_stats.execution_cycles += diff;
-#endif /* CONFIG_THREAD_RUNTIME_STATS */
+#if defined(CONFIG_SCHED_THREAD_USAGE) && !defined(CONFIG_USE_SWITCH)
+	z_sched_usage_stop();
+#endif
 
 #ifdef CONFIG_TRACING
-	sys_trace_thread_switched_out();
+	SYS_PORT_TRACING_FUNC(k_thread, switched_out);
 #endif
 }
+#endif /* CONFIG_INSTRUMENT_THREAD_SWITCHING */
 
-#ifdef CONFIG_THREAD_RUNTIME_STATS
 int k_thread_runtime_stats_get(k_tid_t thread,
 			       k_thread_runtime_stats_t *stats)
 {
@@ -1092,8 +1026,11 @@ int k_thread_runtime_stats_get(k_tid_t thread,
 		return -EINVAL;
 	}
 
-	(void)memcpy(stats, &thread->rt_stats.stats,
-		     sizeof(thread->rt_stats.stats));
+	*stats = (k_thread_runtime_stats_t) {};
+
+#ifdef CONFIG_SCHED_THREAD_USAGE
+	stats->execution_cycles = z_sched_thread_usage(thread);
+#endif
 
 	return 0;
 }
@@ -1104,11 +1041,12 @@ int k_thread_runtime_stats_all_get(k_thread_runtime_stats_t *stats)
 		return -EINVAL;
 	}
 
-	(void)memcpy(stats, &threads_runtime_stats,
-		     sizeof(threads_runtime_stats));
+	*stats = (k_thread_runtime_stats_t) {};
+
+#ifdef CONFIG_SCHED_THREAD_USAGE_ALL
+	stats->execution_cycles = (_kernel.all_thread_usage
+				   + _kernel.idle_thread_usage);
+#endif
 
 	return 0;
 }
-#endif /* CONFIG_THREAD_RUNTIME_STATS */
-
-#endif /* CONFIG_INSTRUMENT_THREAD_SWITCHING */

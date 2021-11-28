@@ -33,6 +33,46 @@ extern "C" {
  */
 #include <sys/util_internal.h>
 
+#ifndef BIT
+#if defined(_ASMLANGUAGE)
+#define BIT(n)  (1 << (n))
+#else
+/**
+ * @brief Unsigned integer with bit position @p n set (signed in
+ * assembly language).
+ */
+#define BIT(n)  (1UL << (n))
+#endif
+#endif
+
+/** @brief 64-bit unsigned integer with bit position @p _n set. */
+#define BIT64(_n) (1ULL << (_n))
+
+/**
+ * @brief Set or clear a bit depending on a boolean value
+ *
+ * The argument @p var is a variable whose value is written to as a
+ * side effect.
+ *
+ * @param var Variable to be altered
+ * @param bit Bit number
+ * @param set if 0, clears @p bit in @p var; any other value sets @p bit
+ */
+#define WRITE_BIT(var, bit, set) \
+	((var) = (set) ? ((var) | BIT(bit)) : ((var) & ~BIT(bit)))
+
+/**
+ * @brief Bit mask with bits 0 through <tt>n-1</tt> (inclusive) set,
+ * or 0 if @p n is 0.
+ */
+#define BIT_MASK(n) (BIT(n) - 1UL)
+
+/**
+ * @brief 64-bit bit mask with bits 0 through <tt>n-1</tt> (inclusive) set,
+ * or 0 if @p n is 0.
+ */
+#define BIT64_MASK(n) (BIT64(n) - 1ULL)
+
 /**
  * @brief Check for macro definition in compiler-visible expressions
  *
@@ -170,15 +210,6 @@ extern "C" {
  * This macro may be used with COND_CODE_1() and COND_CODE_0() while
  * processing <tt>__VA_ARGS__</tt> to avoid processing empty arguments.
  *
- * Note that this macro is intended to check macro names that evaluate
- * to replacement lists being empty or containing numbers or macro name
- * like tokens.
- *
- * @note Not all arguments are accepted by this macro and compilation will fail
- *	 if argument cannot be concatenated with literal constant. That will
- *	 happen if argument does not start with letter or number. Example
- *	 arguments that will fail during compilation: .arg, (arg), "arg", {arg}.
- *
  * Example:
  *
  *	#define EMPTY
@@ -194,9 +225,9 @@ extern "C" {
  * In above examples, the invocations of IS_EMPTY(...) return @p true,
  * @p false, and @p true; @p some_conditional_code is included.
  *
- * @param a macro to check for emptiness
+ * @param ... macro to check for emptiness (may be <tt>__VA_ARGS__</tt>)
  */
-#define IS_EMPTY(a) Z_IS_EMPTY_(a, 1, 0,)
+#define IS_EMPTY(...) Z_IS_EMPTY_(__VA_ARGS__)
 
 /**
  * @brief Remove empty arguments from list.
@@ -276,24 +307,6 @@ extern "C" {
  * @return argument list without N first arguments.
  */
 #define GET_ARGS_LESS_N(N, ...) Z_GET_ARGS_LESS_##N(__VA_ARGS__)
-
-/** Expands to the first argument.
- *
- * @deprecated Use GET_ARG_N() instead.
- */
-#define GET_ARG1(...) GET_ARG_N(1, __VA_ARGS__)
-
-/** Expands to the second argument.
- *
- * @deprecated Use GET_ARG_N() instead.
- */
-#define GET_ARG2(...) __DEPRECATED GET_ARG_N(2, __VA_ARGS__)
-
-/** Expands to all arguments except the first one.
- *
- * @deprecated Use GET_ARGS_LESS_N() instead.
- */
-#define GET_ARGS_LESS_1(...) __DEPRECATED GET_ARGS_LESS_N(1, __VA_ARGS__)
 
 /**
  * @brief Like <tt>a || b</tt>, but does evaluation and

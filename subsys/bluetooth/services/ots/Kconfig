@@ -8,6 +8,7 @@ config BT_OTS
 	select BT_L2CAP_DYNAMIC_CHANNEL
 	select BT_GATT_DYNAMIC_DB
 	select BT_SMP
+	select EXPERIMENTAL
 	help
 	  Enable Object Transfer Service.
 
@@ -45,20 +46,47 @@ config BT_OTS_MAX_OBJ_CNT
 config BT_OTS_SECONDARY_SVC
 	bool "Register OTS as Secondary Service"
 
+config BT_OTS_OACP_CREATE_SUPPORT
+	bool "Support OACP Create Operation"
+	depends on BT_OTS_OACP_WRITE_SUPPORT
+	depends on BT_OTS_OBJ_NAME_WRITE_SUPPORT
+
+config BT_OTS_OACP_DELETE_SUPPORT
+	bool "Support OACP Delete Operation"
+
 config BT_OTS_OACP_READ_SUPPORT
 	bool "Support OACP Read Operation"
 	default y
+
+config BT_OTS_OACP_WRITE_SUPPORT
+	bool "Support OACP Write Operation"
+
+config BT_OTS_OACP_PATCH_SUPPORT
+	bool "Support patching of objects"
+	depends on BT_OTS_OACP_WRITE_SUPPORT
 
 config BT_OTS_OLCP_GO_TO_SUPPORT
 	bool "Support OLCP Go To Operation"
 	default y
 
+config BT_OTS_L2CAP_CHAN_TX_MTU
+	int "Size of TX MTU for Object Transfer Channel"
+	default 256
+	range 21 65533
+
 config BT_OTS_L2CAP_CHAN_RX_MTU
 	int "Size of RX MTU for Object Transfer Channel"
-	default BT_L2CAP_RX_MTU if BT_HCI_ACL_FLOW_CONTROL
-	default 23
-	range 23 BT_L2CAP_RX_MTU if BT_HCI_ACL_FLOW_CONTROL
-	range 23 BT_RX_BUF_LEN
+	# RX MTU will be truncated to account for the L2CAP PDU and SDU header.
+	default BT_BUF_ACL_RX_SIZE
+	range 21 BT_BUF_ACL_RX_SIZE
+
+config BT_OTS_OBJ_MAX_NAME_LEN
+	int "Maximum object name length"
+	default 120
+	range 1 120
+
+config BT_OTS_OBJ_NAME_WRITE_SUPPORT
+	bool "Support object name write"
 
 module = BT_OTS
 module-str = BT_OTS

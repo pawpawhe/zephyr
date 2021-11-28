@@ -1,5 +1,3 @@
-/*  Bluetooth Mesh */
-
 /*
  * Copyright (c) 2017 Intel Corporation
  * Copyright (c) 2020 Nordic Semiconductor ASA
@@ -11,18 +9,25 @@
 #include "net.h"
 #include "proxy.h"
 #include "adv.h"
+#include "host/ecc.h"
 #include "prov.h"
+#include "pb_gatt_srv.h"
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_PROV)
 #define LOG_MODULE_NAME bt_mesh_pb_gatt
 #include "common/log.h"
 
+struct prov_bearer_send_cb {
+	prov_bearer_send_complete_t cb;
+	void *cb_data;
+};
+
 struct prov_link {
 	struct bt_conn *conn;
 	const struct prov_bearer_cb *cb;
 	void *cb_data;
-	struct net_buf_simple *rx_buf;
-	struct k_delayed_work prot_timer;
+	struct prov_bearer_send_cb comp;
+	struct k_work_delayable prot_timer;
 };
 
 static struct prov_link link;
@@ -34,9 +39,8 @@ static void reset_state(void)
 		link.conn = NULL;
 	}
 
-	k_delayed_work_cancel(&link.prot_timer);
-
-	link.rx_buf = bt_mesh_proxy_get_buf();
+	/* If this fails, the protocol timeout handler will exit early. */
+	(void)k_work_cancel_delayable(&link.prot_timer);
 }
 
 static void link_closed(enum prov_bearer_link_status status)
@@ -51,8 +55,12 @@ static void link_closed(enum prov_bearer_link_status status)
 
 static void protocol_timeout(struct k_work *work)
 {
-	BT_DBG("Protocol timeout");
+	if (!link.conn) {
+		/* Already disconnected */
+		return;
+	}
 
+	BT_DBG("Protocol timeout");
 	link_closed(PROV_BEARER_LINK_STATUS_TIMEOUT);
 }
 
@@ -70,7 +78,7 @@ int bt_mesh_pb_gatt_recv(struct bt_conn *conn, struct net_buf_simple *buf)
 		return -EINVAL;
 	}
 
-	k_delayed_work_submit(&link.prot_timer, PROTOCOL_TIMEOUT);
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
 
 	link.cb->recv(&pb_gatt, link.cb_data, buf);
 
@@ -79,14 +87,14 @@ int bt_mesh_pb_gatt_recv(struct bt_conn *conn, struct net_buf_simple *buf)
 
 int bt_mesh_pb_gatt_open(struct bt_conn *conn)
 {
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %p", (void *)conn);
 
 	if (link.conn) {
 		return -EBUSY;
 	}
 
 	link.conn = bt_conn_ref(conn);
-	k_delayed_work_submit(&link.prot_timer, PROTOCOL_TIMEOUT);
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
 
 	link.cb->link_opened(&pb_gatt, link.cb_data);
 
@@ -95,7 +103,7 @@ int bt_mesh_pb_gatt_open(struct bt_conn *conn)
 
 int bt_mesh_pb_gatt_close(struct bt_conn *conn)
 {
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %p", (void *)conn);
 
 	if (link.conn != conn) {
 		BT_DBG("Not connected");
@@ -109,13 +117,28 @@ int bt_mesh_pb_gatt_close(struct bt_conn *conn)
 
 static int link_accept(const struct prov_bearer_cb *cb, void *cb_data)
 {
-	(void)bt_mesh_proxy_prov_enable();
+	int err;
+
+	err = bt_mesh_adv_enable();
+	if (err) {
+		BT_ERR("Failed enabling advertiser");
+		return err;
+	}
+
+	(void)bt_mesh_pb_gatt_enable();
 	bt_mesh_adv_update();
 
 	link.cb = cb;
 	link.cb_data = cb_data;
 
 	return 0;
+}
+
+static void buf_send_end(struct bt_conn *conn, void *user_data)
+{
+	if (link.comp.cb) {
+		link.comp.cb(0, link.comp.cb_data);
+	}
 }
 
 static int buf_send(struct net_buf_simple *buf, prov_bearer_send_complete_t cb,
@@ -125,9 +148,12 @@ static int buf_send(struct net_buf_simple *buf, prov_bearer_send_complete_t cb,
 		return -ENOTCONN;
 	}
 
-	k_delayed_work_submit(&link.prot_timer, PROTOCOL_TIMEOUT);
+	link.comp.cb = cb;
+	link.comp.cb_data = cb_data;
 
-	return bt_mesh_proxy_send(link.conn, BT_MESH_PROXY_PROV, buf);
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
+
+	return bt_mesh_pb_gatt_send(link.conn, buf, buf_send_end, NULL);
 }
 
 static void clear_tx(void)
@@ -137,7 +163,7 @@ static void clear_tx(void)
 
 void pb_gatt_init(void)
 {
-	k_delayed_work_init(&link.prot_timer, protocol_timeout);
+	k_work_init_delayable(&link.prot_timer, protocol_timeout);
 }
 
 void pb_gatt_reset(void)

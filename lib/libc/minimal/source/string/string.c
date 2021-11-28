@@ -17,7 +17,7 @@
  * @return pointer to destination buffer <d>
  */
 
-char *strcpy(char *_MLIBC_RESTRICT d, const char *_MLIBC_RESTRICT s)
+char *strcpy(char *ZRESTRICT d, const char *ZRESTRICT s)
 {
 	char *dest = d;
 
@@ -39,7 +39,7 @@ char *strcpy(char *_MLIBC_RESTRICT d, const char *_MLIBC_RESTRICT s)
  * @return pointer to destination buffer <d>
  */
 
-char *strncpy(char *_MLIBC_RESTRICT d, const char *_MLIBC_RESTRICT s, size_t n)
+char *strncpy(char *ZRESTRICT d, const char *ZRESTRICT s, size_t n)
 {
 	char *dest = d;
 
@@ -209,13 +209,13 @@ char *strtok_r(char *str, const char *sep, char **state)
 	return start;
 }
 
-char *strcat(char *_MLIBC_RESTRICT dest, const char *_MLIBC_RESTRICT src)
+char *strcat(char *ZRESTRICT dest, const char *ZRESTRICT src)
 {
 	strcpy(dest + strlen(dest), src);
 	return dest;
 }
 
-char *strncat(char *_MLIBC_RESTRICT dest, const char *_MLIBC_RESTRICT src,
+char *strncat(char *ZRESTRICT dest, const char *ZRESTRICT src,
 	      size_t n)
 {
 	char *orig_dest = dest;
@@ -295,12 +295,14 @@ void *memmove(void *d, const void *s, size_t n)
  * @return pointer to start of destination buffer
  */
 
-void *memcpy(void *_MLIBC_RESTRICT d, const void *_MLIBC_RESTRICT s, size_t n)
+void *memcpy(void *ZRESTRICT d, const void *ZRESTRICT s, size_t n)
 {
 	/* attempt word-sized copying only if buffers have identical alignment */
 
 	unsigned char *d_byte = (unsigned char *)d;
 	const unsigned char *s_byte = (const unsigned char *)s;
+
+#if !defined(CONFIG_MINIMAL_LIBC_OPTIMIZE_STRING_FOR_SIZE)
 	const uintptr_t mask = sizeof(mem_word_t) - 1;
 
 	if ((((uintptr_t)d ^ (uintptr_t)s_byte) & mask) == 0) {
@@ -328,6 +330,7 @@ void *memcpy(void *_MLIBC_RESTRICT d, const void *_MLIBC_RESTRICT s, size_t n)
 		d_byte = (unsigned char *)d_word;
 		s_byte = (unsigned char *)s_word;
 	}
+#endif
 
 	/* do byte-sized copying until finished */
 
@@ -353,6 +356,7 @@ void *memset(void *buf, int c, size_t n)
 	unsigned char *d_byte = (unsigned char *)buf;
 	unsigned char c_byte = (unsigned char)c;
 
+#if !defined(CONFIG_MINIMAL_LIBC_OPTIMIZE_STRING_FOR_SIZE)
 	while (((uintptr_t)d_byte) & (sizeof(mem_word_t) - 1)) {
 		if (n == 0) {
 			return buf;
@@ -380,6 +384,7 @@ void *memset(void *buf, int c, size_t n)
 	/* do byte-sized initialization until finished */
 
 	d_byte = (unsigned char *)d_word;
+#endif
 
 	while (n > 0) {
 		*(d_byte++) = c_byte;

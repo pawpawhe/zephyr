@@ -13,63 +13,6 @@ config BT_HCI_HOST
 	depends on !BT_HCI_RAW
 	select POLL
 
-config BT_HCI_CMD_COUNT
-	int "Number of HCI command buffers"
-	default 2
-	range 2 64
-	help
-	  Number of buffers available for HCI commands.
-
-config BT_RX_BUF_COUNT
-	int "Number of HCI RX buffers"
-	default NET_BUF_RX_COUNT if NET_L2_BT
-	default 3 if BT_RECV_IS_RX_THREAD
-	default 20 if (BT_MESH && !(BT_DISCARDABLE_BUF_COUNT > 0))
-	default 10
-	range 2 255
-	help
-	  Number of buffers available for incoming ACL packets or HCI events
-	  from the controller.
-
-config BT_RX_BUF_LEN
-	int "Maximum supported HCI RX buffer length"
-	default 264 if BT_BREDR
-	default 258 if BT_EXT_ADV
-	default 77 if BT_MESH_PROXY
-	default 76
-	range 73 2000
-	help
-	  Maximum data size for each HCI RX buffer. This size includes
-	  everything starting with the ACL or HCI event headers. Note that
-	  buffer sizes are always rounded up to the nearest multiple of 4,
-	  so if this Kconfig value is something else then there will be some
-	  wasted space. The minimum of 73 has been taken for LE SC which has
-	  an L2CAP MTU of 65 bytes. On top of this there's the L2CAP header
-	  (4 bytes) and the ACL header (also 4 bytes) which yields 73 bytes.
-
-config BT_DISCARDABLE_BUF_COUNT
-	int "Number of discardable event buffers"
-	range 1 255
-	default 20 if BT_MESH
-	default 3
-	depends on BT_H4 || BT_RPMSG || BT_CTLR
-	help
-	  Number of buffers in a separate buffer pool for events which
-	  the HCI driver considers discardable. Examples of such events
-	  could be e.g. Advertising Reports. The benefit of having such
-	  a pool means that the if there is a heavy inflow of such events
-	  it will not cause the allocation for other critical events to
-	  block and may even eliminate deadlocks in some cases.
-
-config BT_DISCARDABLE_BUF_SIZE
-	int "Size of discardable event buffers"
-	range 45 257
-	default 257 if BT_BREDR || BT_EXT_ADV
-	default 45
-	help
-	  Size of buffers in the separate discardable event buffer pool.
-	  The minimum size is set based on the Advertising Report. Setting
-	  the buffer size different than BT_RX_BUF_LEN can save memory.
 
 config BT_HCI_TX_STACK_SIZE
 	# NOTE: This value is derived from other symbols and should only be
@@ -101,7 +44,7 @@ config BT_HCI_ECC_STACK_SIZE
 	# NOTE: This value is derived from other symbols and should only be
 	# changed if required by architecture
 	int "HCI ECC thread stack size"
-	default 1100
+	default 1140
 	help
 	  NOTE: This is an advanced setting and should not be changed unless
 	  absolutely necessary
@@ -119,22 +62,13 @@ config BT_HCI_RESERVE
 	default 1 if BT_SPI
 	default 1 if BT_STM32_IPM
 	default 1 if BT_USERCHAN
+	default 1 if BT_ESP32
 	# Even if no driver is selected the following default is still
 	# needed e.g. for unit tests.
 	default 0
 	help
 	  Headroom that the driver needs for sending and receiving buffers. Add a
 	  new 'default' entry for each new driver.
-
-config BT_HCI_ACL_DATA_SIZE
-	int
-	prompt "ACL data buffer size" if !BT_CTLR
-	depends on BT_HCI_RAW
-	range 27 251
-	default BT_CTLR_DATA_LENGTH_MAX if BT_CTLR_DATA_LENGTH
-	default 27
-	help
-	  Maximum ACL data payload in HCI packets, excluding HCI header.
 
 config BT_RECV_IS_RX_THREAD
 	# Hidden option set by the HCI driver to indicate that there's
@@ -239,34 +173,28 @@ config BT_SETTINGS_USE_PRINTK
 endif # BT_SETTINGS
 
 config BT_WHITELIST
-	bool "Enable whitelist support"
+	bool "DEPRECATED: Use BT_FILTER_ACCEPT_LIST instead"
+	select BT_FILTER_ACCEPT_LIST
+
+config BT_FILTER_ACCEPT_LIST
+	bool "Enable filter accept list support"
 	help
-	  This option enables the whitelist API. This takes advantage of the
-	  whitelisting feature of a BLE controller.
-	  The whitelist is a global list and the same whitelist is used
-	  by both scanner and advertiser. The whitelist cannot be modified while
+	  This option enables the filter accep list API. This takes advantage of the
+	  filtering feature of a BLE controller.
+	  The filter accept list is a global list and the same list is used
+	  by both scanner and advertiser. The filter accept list cannot be modified while
 	  it is in use.
 
-	  An Advertiser can whitelist which peers can connect or request scan
+	  An Advertiser can filter which peers can connect or request scan
 	  response data.
-	  A scanner can whitelist advertiser for which it will generate
+	  A scanner can filter advertisers for which it will generate
 	  advertising reports.
-	  Connections can be established automatically for whitelisted peers.
+	  Connections can be established automatically for accepted peers.
 
 	  This options deprecates the bt_le_set_auto_conn API in favor of the
 	  bt_conn_create_aute_le API.
 
 if BT_CONN
-
-config BT_ACL_RX_COUNT
-	int "Number of incoming ACL data buffers"
-	default BT_CTLR_RX_BUFFERS if BT_CTLR
-	default NET_BUF_RX_COUNT if NET_L2_BT
-	default 6
-	range 1 64
-	depends on BT_HCI_ACL_FLOW_CONTROL
-	help
-	  Number of buffers available for incoming ACL data.
 
 config BT_CONN_TX_MAX
 	int "Maximum number of pending TX buffers with a callback"
@@ -427,10 +355,10 @@ config BT_SMP_USB_HCI_CTLR_WORKAROUND
 	  This option enables support for USB HCI controllers that sometimes
 	  send out-of-order HCI events and ACL Data due to using different USB
 	  endpoints.
-	  Enabling this option will make the master role not require the
+	  Enabling this option will make the central role not require the
 	  encryption-change event to be received before accepting key-distribution
 	  data.
-	  It opens up for a potential vulnerability as the master cannot detect
+	  It opens up for a potential vulnerability as the central cannot detect
 	  if the keys are distributed over an encrypted link.
 
 config BT_FIXED_PASSKEY
@@ -497,11 +425,11 @@ config BT_OOB_DATA_FIXED
 	  Use of this feature in production is strongly discouraged.
 
 config BT_KEYS_OVERWRITE_OLDEST
-	bool "Overwrite oldest keys with new ones if key storage is full"
+	bool "Overwrite the oldest key if key storage is full"
 	help
-	  With this option enabled, if a pairing attempt occurs and the key storage
-	  is full, then the oldest keys in storage will be removed to free space
-	  for the new pairing keys.
+	  If a pairing attempt occurs and the key storage is full then the
+	  oldest key from the set of not currently in use keys will be selected
+	  and overwritten by the pairing device.
 
 config BT_KEYS_SAVE_AGING_COUNTER_ON_PAIRING
 	bool "Store aging counter every time a successful paring occurs"
@@ -522,8 +450,8 @@ config BT_SMP_MIN_ENC_KEY_SIZE
 
 endif # BT_SMP
 
-source "subsys/bluetooth/host/Kconfig.l2cap"
-source "subsys/bluetooth/host/Kconfig.gatt"
+rsource "Kconfig.l2cap"
+rsource "Kconfig.gatt"
 
 config BT_MAX_PAIRED
 	int "Maximum number of paired devices"
@@ -615,7 +543,7 @@ config BT_DEVICE_APPEARANCE
 
 config BT_ID_MAX
 	int "Maximum number of local identities"
-	range 1 10
+	range 1 64
 	default 1
 	help
 	  Maximum number of supported local identity addresses. For most
@@ -623,10 +551,25 @@ config BT_ID_MAX
 
 config BT_DF
 	bool "Enable Direction Finding support [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	help
 	  Enable support for Bluetooth 5.1 Direction Finding.
 	  It will allow to: get information about antennae, configure
 	  Constant Tone Extension, transmit CTE and sample incoming CTE.
+
+config BT_DF_CONNECTIONLESS_CTE_RX
+	bool "Enable support for receive of CTE in connectionless mode"
+	depends on BT_DF
+	help
+	  Enable support for reception and sampling of Constant Tone Extension
+	  in connectionless mode.
+
+config BT_DF_CONNECTION_CTE_RX
+	bool "Enable support for receive of CTE in connection mode"
+	depends on BT_DF
+	help
+	  Enable support for reception and sampling of Constant Tone Extension
+	  in connection mode.
 
 config BT_DEBUG_DF
 	bool "Bluetooth Direction Finding debug"
@@ -682,7 +625,7 @@ config BT_DEBUG_HCI_CORE
 
 config BT_DEBUG_CONN
 	bool "Bluetooth connection debug"
-	depends on BT_CONN
+	depends on BT_CONN || BT_ISO
 	help
 	  This option enables debug support for Bluetooth
 	  connection handling.
@@ -810,6 +753,7 @@ config BT_BREDR
 	select BT_CENTRAL
 	select BT_SMP
 	select BT_L2CAP_DYNAMIC_CHANNEL
+	select EXPERIMENTAL
 	help
 	  This option enables Bluetooth BR/EDR support
 
@@ -824,16 +768,16 @@ config BT_MAX_SCO_CONN
 
 config BT_RFCOMM
 	bool "Bluetooth RFCOMM protocol support [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	help
 	  This option enables Bluetooth RFCOMM support
 
 config BT_RFCOMM_L2CAP_MTU
 	int "L2CAP MTU for RFCOMM frames"
-	default BT_L2CAP_RX_MTU if BT_HCI_ACL_FLOW_CONTROL
-	default BT_RX_BUF_LEN
 	depends on BT_RFCOMM
-	range BT_L2CAP_RX_MTU 32767 if BT_HCI_ACL_FLOW_CONTROL
-	range BT_RX_BUF_LEN 32767
+	# RX MTU will be truncated to account for the L2CAP PDU header.
+	default BT_BUF_ACL_RX_SIZE
+	range 23 32767
 	help
 	  Maximum size of L2CAP PDU for RFCOMM frames.
 
@@ -841,17 +785,20 @@ config BT_HFP_HF
 	bool "Bluetooth Handsfree profile HF Role support [EXPERIMENTAL]"
 	depends on PRINTK
 	select BT_RFCOMM
+	select EXPERIMENTAL
 	help
 	  This option enables Bluetooth HF support
 
 config BT_AVDTP
 	bool "Bluetooth AVDTP protocol support [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	help
 	  This option enables Bluetooth AVDTP support
 
 config BT_A2DP
 	bool "Bluetooth A2DP Profile [EXPERIMENTAL]"
 	select BT_AVDTP
+	select EXPERIMENTAL
 	help
 	  This option enables the A2DP profile
 

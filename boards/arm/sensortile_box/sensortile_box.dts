@@ -47,20 +47,46 @@
 	};
 };
 
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(16)>;
+	status = "okay";
+};
+
+&pll {
+	div-m = <4>;
+	mul-n = <40>;
+	div-p = <7>;
+	div-q = <2>;
+	div-r = <2>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(80)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
+
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
 	current-speed = <115200>;
 	status = "okay";
 };
 
 &usart2 {
 	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
+	pinctrl-names = "default";
 	current-speed = <115200>;
 	status = "okay";
 };
 
 &i2c1 {
 	pinctrl-0 = <&i2c1_scl_pb6 &i2c1_sda_pb7>;
+	pinctrl-names = "default";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
 
@@ -81,6 +107,7 @@
 
 &i2c3 {
 	pinctrl-0 = <&i2c3_scl_pg7 &i2c3_sda_pg8>;
+	pinctrl-names = "default";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
 
@@ -95,6 +122,7 @@
 &spi1 {
 	pinctrl-0 = <&spi1_nss_pe12 &spi1_sck_pe13
 		     &spi1_miso_pe14 &spi1_mosi_pe15>;
+	pinctrl-names = "default";
 	status = "okay";
 
 	cs-gpios = <&gpioe 11 GPIO_ACTIVE_LOW>, <&gpioe 12 GPIO_ACTIVE_LOW>, <&gpioe 10 GPIO_ACTIVE_LOW>;
@@ -128,6 +156,7 @@
 &spi3 {
 	pinctrl-0 = <&spi3_nss_pa15 &spi3_sck_pb3
 		     &spi3_miso_pb4 &spi3_mosi_pb5>;
+	pinctrl-names = "default";
 	status = "okay";
 
 	cs-gpios = <&gpioa 15 GPIO_ACTIVE_LOW>;
@@ -135,22 +164,16 @@
 	lis2mdl@0 {
 		compatible = "st,lis2mdl";
 		spi-max-frequency = <1000000>;
+		spi-full-duplex;
 		reg = <0>;
 		label = "LIS2MDL";
 	};
 };
 
-&usbotg_fs {
+zephyr_udc0: &usbotg_fs {
 	pinctrl-0 = <&usb_otg_fs_dm_pa11 &usb_otg_fs_dp_pa12>;
+	pinctrl-names = "default";
 	status = "okay";
-};
-
-&timers2 {
-	status = "okay";
-
-	pwm {
-		status = "okay";
-	};
 };
 
 &rtc {

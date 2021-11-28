@@ -1,11 +1,11 @@
 .. _bluetooth_mesh_access:
 
-Access
-######
+Access layer
+############
 
-The Bluetooth Mesh access layer is the application's interface to the mesh
-network. The access layer provides mechanisms for compartmentalizing the node
-behavior into elements and models, which are implemented by the application.
+The access layer is the application's interface to the Bluetooth mesh network.
+The access layer provides mechanisms for compartmentalizing the node behavior
+into elements and models, which are implemented by the application.
 
 Mesh models
 ***********
@@ -29,7 +29,7 @@ behavior in the `Bluetooth Mesh Model Specification
 not specified by the Bluetooth SIG are vendor models, and must be tied to a
 Company ID.
 
-Mesh Models have several parameters that can be configured either through
+Mesh models have several parameters that can be configured either through
 initialization of the mesh stack or with the
 :ref:`bluetooth_mesh_models_cfg_srv`:
 
@@ -56,7 +56,7 @@ messages on. Only messages encrypted with application keys in the AppKey list
 will be passed to the model.
 
 The maximum number of supported application keys each model can hold is
-configured with the :option:`CONFIG_BT_MESH_MODEL_KEY_COUNT` configuration
+configured with the :kconfig:`CONFIG_BT_MESH_MODEL_KEY_COUNT` configuration
 option. The contents of the AppKey list is managed by the
 :ref:`bluetooth_mesh_models_cfg_srv`.
 
@@ -70,7 +70,7 @@ virtual address in its subscription list. This allows nodes to address
 multiple nodes throughout the mesh network with a single message.
 
 The maximum number of supported addresses in the Subscription list each model
-can hold is configured with the :option:`CONFIG_BT_MESH_MODEL_GROUP_COUNT`
+can hold is configured with the :kconfig:`CONFIG_BT_MESH_MODEL_GROUP_COUNT`
 configuration option. The contents of the subscription list is managed by the
 :ref:`bluetooth_mesh_models_cfg_srv`.
 
@@ -100,10 +100,20 @@ populate the :c:member:`bt_mesh_model_pub.update` callback. The
 message is published, allowing the model to change the payload to reflect its
 current state.
 
+By setting :c:member:`bt_mesh_model_pub.retr_update` to 1, the model can
+configure the :c:member:`bt_mesh_model_pub.update` callback to be triggered
+on every retransmission. This can, for example, be used by models that make
+use of a Delay parameter, which can be adjusted for every retransmission.
+The :c:func:`bt_mesh_model_pub_is_retransmission` function can be
+used to differentiate a first publication and a retransmission.
+The :c:macro:`BT_MESH_PUB_MSG_TOTAL` and :c:macro:`BT_MESH_PUB_MSG_NUM` macros
+can be used to return total number of transmissions and the retransmission
+number within one publication interval.
+
 Extended models
 ===============
 
-The Bluetooth Mesh specification allows the Mesh models to extend each other.
+The Bluetooth mesh specification allows the mesh models to extend each other.
 When a model extends another, it inherits that model's functionality, and
 extension can be used to construct complex models out of simple ones,
 leveraging the existing model functionality to avoid defining new opcodes.
@@ -122,7 +132,7 @@ relationships between the models must be defined by the model implementations.
 
 The model extension concept adds some overhead in the access layer packet
 processing, and must be explicitly enabled with
-:option:`CONFIG_BT_MESH_MODEL_EXTENSIONS` to have any effect.
+:kconfig:`CONFIG_BT_MESH_MODEL_EXTENSIONS` to have any effect.
 
 Model data storage
 ==================
@@ -143,5 +153,3 @@ API reference
 *************
 
 .. doxygengroup:: bt_mesh_access
-   :project: Zephyr
-   :members:

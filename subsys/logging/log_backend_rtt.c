@@ -154,9 +154,11 @@ static int line_out_drop_mode(void)
 		}
 	}
 
+	int ret;
+
 	RTT_LOCK();
-	int ret = SEGGER_RTT_WriteSkipNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
-					     line_buf, line_pos - line_buf);
+	ret = SEGGER_RTT_WriteSkipNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
+					 line_buf, line_pos - line_buf);
 	RTT_UNLOCK();
 
 	if (ret == 0) {
@@ -209,12 +211,12 @@ static int data_out_block_mode(uint8_t *data, size_t length, void *ctx)
 	do {
 		if (!is_sync_mode()) {
 			RTT_LOCK();
-		}
-
-		ret = SEGGER_RTT_WriteSkipNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
-						 data, length);
-		if (!is_sync_mode()) {
+			ret = SEGGER_RTT_WriteSkipNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
+							 data, length);
 			RTT_UNLOCK();
+		} else {
+			ret = SEGGER_RTT_WriteSkipNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
+							 data, length);
 		}
 
 		if (ret) {
@@ -229,9 +231,27 @@ static int data_out_block_mode(uint8_t *data, size_t length, void *ctx)
 	return ((ret == 0) && host_present) ? 0 : length;
 }
 
+static int data_out_overwrite_mode(uint8_t *data, size_t length, void *ctx)
+{
+	if (!is_sync_mode()) {
+		RTT_LOCK();
+		SEGGER_RTT_WriteWithOverwriteNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
+						    data, length);
+
+		RTT_UNLOCK();
+	} else {
+		SEGGER_RTT_WriteWithOverwriteNoLock(CONFIG_LOG_BACKEND_RTT_BUFFER,
+						    data, length);
+	}
+
+	return length;
+}
+
 LOG_OUTPUT_DEFINE(log_output_rtt,
 		  IS_ENABLED(CONFIG_LOG_BACKEND_RTT_MODE_BLOCK) ?
-			  data_out_block_mode : data_out_drop_mode,
+		  data_out_block_mode :
+		  IS_ENABLED(CONFIG_LOG_BACKEND_RTT_MODE_OVERWRITE) ?
+		  data_out_overwrite_mode : data_out_drop_mode,
 		  char_buf, sizeof(char_buf));
 
 static void put(const struct log_backend *const backend,
@@ -295,11 +315,20 @@ static void sync_hexdump(const struct log_backend *const backend,
 				     timestamp, metadata, data, length);
 }
 
+static void process(const struct log_backend *const backend,
+		union log_msg2_generic *msg)
+{
+	uint32_t flags = log_backend_std_get_flags();
+
+	log_output_msg2_process(&log_output_rtt, &msg->log, flags);
+}
+
 const struct log_backend_api log_backend_rtt_api = {
-	.put = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ? NULL : put,
-	.put_sync_string = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ?
+	.process = IS_ENABLED(CONFIG_LOG2) ? process : NULL,
+	.put = IS_ENABLED(CONFIG_LOG_MODE_DEFERRED) ? put : NULL,
+	.put_sync_string = IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE) ?
 			sync_string : NULL,
-	.put_sync_hexdump = IS_ENABLED(CONFIG_LOG_IMMEDIATE) ?
+	.put_sync_hexdump = IS_ENABLED(CONFIG_LOG_MODE_IMMEDIATE) ?
 			sync_hexdump : NULL,
 	.panic = panic,
 	.init = log_backend_rtt_init,

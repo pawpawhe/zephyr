@@ -17,7 +17,7 @@
 #include "clock_stm32_ll_common.h"
 #include "stm32_hsem.h"
 
-#ifdef CONFIG_CLOCK_STM32_SYSCLK_SRC_PLL
+#if STM32_SYSCLK_SRC_PLL
 
 /* Macros to fill up division factors values */
 #define z_pllm(v) LL_RCC_PLLM_DIV_ ## v
@@ -31,9 +31,9 @@
  */
 void config_pll_init(LL_UTILS_PLLInitTypeDef *pllinit)
 {
-	pllinit->PLLM = pllm(CONFIG_CLOCK_STM32_PLL_M_DIVISOR);
-	pllinit->PLLN = CONFIG_CLOCK_STM32_PLL_N_MULTIPLIER;
-	pllinit->PLLR = pllr(CONFIG_CLOCK_STM32_PLL_R_DIVISOR);
+	pllinit->PLLM = pllm(STM32_PLL_M_DIVISOR);
+	pllinit->PLLN = STM32_PLL_N_MULTIPLIER;
+	pllinit->PLLR = pllr(STM32_PLL_R_DIVISOR);
 #ifdef PWR_CR5_R1MODE
 	/* set power boost mode for sys clock greater than 80MHz */
 	if (sys_clock_hw_cycles_per_sec() >= MHZ(80)) {
@@ -41,14 +41,19 @@ void config_pll_init(LL_UTILS_PLLInitTypeDef *pllinit)
 	}
 #endif /* PWR_CR5_R1MODE */
 }
-#endif /* CONFIG_CLOCK_STM32_SYSCLK_SRC_PLL */
+#endif /* STM32_SYSCLK_SRC_PLL */
 
 /**
  * @brief Activate default clocks
  */
 void config_enable_default_clocks(void)
 {
-#ifdef CONFIG_CLOCK_STM32_LSE
+#ifdef LL_APB1_GRP1_PERIPH_PWR
+	/* Enable the power interface clock */
+	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+#endif
+
+#if STM32_LSE_CLOCK
 	/* LSE belongs to the back-up domain, enable access.*/
 
 #if defined(CONFIG_SOC_SERIES_STM32WBX)
@@ -56,11 +61,6 @@ void config_enable_default_clocks(void)
 	LL_AHB3_GRP1_EnableClock(LL_AHB3_GRP1_PERIPH_HSEM);
 #endif
 	z_stm32_hsem_lock(CFG_HW_RCC_SEMID, HSEM_LOCK_DEFAULT_RETRY);
-
-#ifdef LL_APB1_GRP1_PERIPH_PWR
-	/* Enable the power interface clock */
-	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
-#endif
 
 	/* Set the DBP bit in the Power control register 1 (PWR_CR1) */
 	LL_PWR_EnableBkUpAccess();

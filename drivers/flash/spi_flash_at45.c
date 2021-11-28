@@ -11,6 +11,8 @@
 
 LOG_MODULE_REGISTER(spi_flash_at45, CONFIG_FLASH_LOG_LEVEL);
 
+#define DT_DRV_COMPAT atmel_at45
+
 /* AT45 commands used by this driver: */
 /* - Continuous Array Read (Low Power Mode) */
 #define CMD_READ		0x01
@@ -42,6 +44,11 @@ LOG_MODULE_REGISTER(spi_flash_at45, CONFIG_FLASH_LOG_LEVEL);
 #define STATUS_REG_LSB_RDY_BUSY_BIT	0x80
 #define STATUS_REG_LSB_PAGE_SIZE_BIT	0x01
 
+#define INST_HAS_WP_OR(inst) DT_INST_NODE_HAS_PROP(inst, wp_gpios) ||
+#define ANY_INST_HAS_WP_GPIOS DT_INST_FOREACH_STATUS_OKAY(INST_HAS_WP_OR) 0
+
+#define INST_HAS_RESET_OR(inst) DT_INST_NODE_HAS_PROP(inst, reset_gpios) ||
+#define ANY_INST_HAS_RESET_GPIOS DT_INST_FOREACH_STATUS_OKAY(INST_HAS_RESET_OR) 0
 
 #define DEF_BUF_SET(_name, _buf_array) \
 	const struct spi_buf_set _name = { \
@@ -50,20 +57,17 @@ LOG_MODULE_REGISTER(spi_flash_at45, CONFIG_FLASH_LOG_LEVEL);
 	}
 
 struct spi_flash_at45_data {
-	const struct device *spi;
-	struct spi_cs_control spi_cs;
 	struct k_sem lock;
-#if IS_ENABLED(CONFIG_PM_DEVICE)
-	uint32_t pm_state;
-#endif
 };
 
 struct spi_flash_at45_config {
-	const char *spi_bus;
-	struct spi_config spi_cfg;
-	const char *cs_gpio;
-	gpio_pin_t cs_pin;
-	gpio_dt_flags_t cs_dt_flags;
+	struct spi_dt_spec bus;
+#if ANY_INST_HAS_RESET_GPIOS
+	const struct gpio_dt_spec *reset;
+#endif
+#if ANY_INST_HAS_WP_GPIOS
+	const struct gpio_dt_spec *wp;
+#endif
 #if IS_ENABLED(CONFIG_FLASH_PAGE_LAYOUT)
 	struct flash_pages_layout pages_layout;
 #endif
@@ -127,9 +131,7 @@ static int check_jedec_id(const struct device *dev)
 	DEF_BUF_SET(tx_buf_set, tx_buf);
 	DEF_BUF_SET(rx_buf_set, rx_buf);
 
-	err = spi_transceive(get_dev_data(dev)->spi,
-			     &cfg->spi_cfg,
-			     &tx_buf_set, &rx_buf_set);
+	err = spi_transceive_dt(&cfg->bus, &tx_buf_set, &rx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -155,6 +157,7 @@ static int check_jedec_id(const struct device *dev)
  */
 static int read_status_register(const struct device *dev, uint16_t *status)
 {
+	const struct spi_flash_at45_config *cfg = get_dev_config(dev);
 	int err;
 	const uint8_t opcode = CMD_READ_STATUS;
 	const struct spi_buf tx_buf[] = {
@@ -175,9 +178,7 @@ static int read_status_register(const struct device *dev, uint16_t *status)
 	DEF_BUF_SET(tx_buf_set, tx_buf);
 	DEF_BUF_SET(rx_buf_set, rx_buf);
 
-	err = spi_transceive(get_dev_data(dev)->spi,
-			     &get_dev_config(dev)->spi_cfg,
-			     &tx_buf_set, &rx_buf_set);
+	err = spi_transceive_dt(&cfg->bus, &tx_buf_set, &rx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -202,6 +203,7 @@ static int wait_until_ready(const struct device *dev)
 
 static int configure_page_size(const struct device *dev)
 {
+	const struct spi_flash_at45_config *cfg = get_dev_config(dev);
 	int err;
 	uint16_t status;
 	uint8_t const conf_binary_page_size[] = CMD_BINARY_PAGE_SIZE;
@@ -225,9 +227,7 @@ static int configure_page_size(const struct device *dev)
 		return 0;
 	}
 
-	err = spi_write(get_dev_data(dev)->spi,
-			&get_dev_config(dev)->spi_cfg,
-			&tx_buf_set);
+	err = spi_write_dt(&cfg->bus, &tx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -278,9 +278,7 @@ static int spi_flash_at45_read(const struct device *dev, off_t offset,
 	DEF_BUF_SET(rx_buf_set, rx_buf);
 
 	acquire(dev);
-	err = spi_transceive(get_dev_data(dev)->spi,
-			     &cfg->spi_cfg,
-			     &tx_buf_set, &rx_buf_set);
+	err = spi_transceive_dt(&cfg->bus, &tx_buf_set, &rx_buf_set);
 	release(dev);
 
 	if (err != 0) {
@@ -294,6 +292,7 @@ static int spi_flash_at45_read(const struct device *dev, off_t offset,
 static int perform_write(const struct device *dev, off_t offset,
 			 const void *data, size_t len)
 {
+	const struct spi_flash_at45_config *cfg = get_dev_config(dev);
 	int err;
 	uint8_t const op_and_addr[] = {
 		IS_ENABLED(CONFIG_SPI_FLASH_AT45_USE_READ_MODIFY_WRITE)
@@ -315,9 +314,7 @@ static int perform_write(const struct device *dev, off_t offset,
 	};
 	DEF_BUF_SET(tx_buf_set, tx_buf);
 
-	err = spi_write(get_dev_data(dev)->spi,
-			&get_dev_config(dev)->spi_cfg,
-			&tx_buf_set);
+	err = spi_write_dt(&cfg->bus, &tx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -340,6 +337,12 @@ static int spi_flash_at45_write(const struct device *dev, off_t offset,
 
 	acquire(dev);
 
+#if ANY_INST_HAS_WP_GPIOS
+	if (cfg->wp) {
+		gpio_pin_set(cfg->wp->port, cfg->wp->pin, 0);
+	}
+#endif
+
 	while (len) {
 		size_t chunk_len = len;
 		off_t current_page_start =
@@ -360,6 +363,12 @@ static int spi_flash_at45_write(const struct device *dev, off_t offset,
 		len    -= chunk_len;
 	}
 
+#if ANY_INST_HAS_WP_GPIOS
+	if (cfg->wp) {
+		gpio_pin_set(cfg->wp->port, cfg->wp->pin, 1);
+	}
+#endif
+
 	release(dev);
 
 	return err;
@@ -367,6 +376,7 @@ static int spi_flash_at45_write(const struct device *dev, off_t offset,
 
 static int perform_chip_erase(const struct device *dev)
 {
+	const struct spi_flash_at45_config *cfg = get_dev_config(dev);
 	int err;
 	uint8_t const chip_erase_cmd[] = CMD_CHIP_ERASE;
 	const struct spi_buf tx_buf[] = {
@@ -377,9 +387,7 @@ static int perform_chip_erase(const struct device *dev)
 	};
 	DEF_BUF_SET(tx_buf_set, tx_buf);
 
-	err = spi_write(get_dev_data(dev)->spi,
-			&get_dev_config(dev)->spi_cfg,
-			&tx_buf_set);
+	err = spi_write_dt(&cfg->bus, &tx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -400,6 +408,7 @@ static bool is_erase_possible(size_t entity_size,
 static int perform_erase_op(const struct device *dev, uint8_t opcode,
 			    off_t offset)
 {
+	const struct spi_flash_at45_config *cfg = get_dev_config(dev);
 	int err;
 	uint8_t const op_and_addr[] = {
 		opcode,
@@ -415,9 +424,7 @@ static int perform_erase_op(const struct device *dev, uint8_t opcode,
 	};
 	DEF_BUF_SET(tx_buf_set, tx_buf);
 
-	err = spi_write(get_dev_data(dev)->spi,
-			&get_dev_config(dev)->spi_cfg,
-			&tx_buf_set);
+	err = spi_write_dt(&cfg->bus, &tx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -445,6 +452,12 @@ static int spi_flash_at45_erase(const struct device *dev, off_t offset,
 	}
 
 	acquire(dev);
+
+#if ANY_INST_HAS_WP_GPIOS
+	if (cfg->wp) {
+		gpio_pin_set(cfg->wp->port, cfg->wp->pin, 0);
+	}
+#endif
 
 	if (size == cfg->chip_size) {
 		err = perform_chip_erase(dev);
@@ -481,6 +494,12 @@ static int spi_flash_at45_erase(const struct device *dev, off_t offset,
 		}
 	}
 
+#if ANY_INST_HAS_WP_GPIOS
+	if (cfg->wp) {
+		gpio_pin_set(cfg->wp->port, cfg->wp->pin, 1);
+	}
+#endif
+
 	release(dev);
 
 	return err;
@@ -499,6 +518,7 @@ static void spi_flash_at45_pages_layout(const struct device *dev,
 static int power_down_op(const struct device *dev, uint8_t opcode,
 			 uint32_t delay)
 {
+	const struct spi_flash_at45_config *cfg = get_dev_config(dev);
 	int err = 0;
 	const struct spi_buf tx_buf[] = {
 		{
@@ -508,9 +528,7 @@ static int power_down_op(const struct device *dev, uint8_t opcode,
 	};
 	DEF_BUF_SET(tx_buf_set, tx_buf);
 
-	err = spi_write(get_dev_data(dev)->spi,
-			&get_dev_config(dev)->spi_cfg,
-			&tx_buf_set);
+	err = spi_write_dt(&cfg->bus, &tx_buf_set);
 	if (err != 0) {
 		LOG_ERR("SPI transaction failed with code: %d/%u",
 			err, __LINE__);
@@ -524,28 +542,35 @@ static int power_down_op(const struct device *dev, uint8_t opcode,
 
 static int spi_flash_at45_init(const struct device *dev)
 {
-	struct spi_flash_at45_data *dev_data = get_dev_data(dev);
 	const struct spi_flash_at45_config *dev_config = get_dev_config(dev);
 	int err;
 
-	dev_data->spi = device_get_binding(dev_config->spi_bus);
-	if (!dev_data->spi) {
-		LOG_ERR("Cannot find %s", dev_config->spi_bus);
+	if (!spi_is_ready(&dev_config->bus)) {
+		LOG_ERR("SPI bus %s not ready", dev_config->bus.bus->name);
 		return -ENODEV;
 	}
 
-	if (dev_config->cs_gpio) {
-		dev_data->spi_cs.gpio_dev =
-			device_get_binding(dev_config->cs_gpio);
-		if (!dev_data->spi_cs.gpio_dev) {
-			LOG_ERR("Cannot find %s", dev_config->cs_gpio);
+#if ANY_INST_HAS_RESET_GPIOS
+	if (dev_config->reset) {
+		if (gpio_pin_configure_dt(dev_config->reset,
+					GPIO_OUTPUT_ACTIVE)) {
+			LOG_ERR("Couldn't configure reset pin");
 			return -ENODEV;
 		}
-
-		dev_data->spi_cs.gpio_pin = dev_config->cs_pin;
-		dev_data->spi_cs.gpio_dt_flags = dev_config->cs_dt_flags;
-		dev_data->spi_cs.delay = 0;
+		gpio_pin_set(dev_config->reset->port, dev_config->reset->pin, 0);
 	}
+#endif
+
+#if ANY_INST_HAS_WP_GPIOS
+	if (dev_config->wp) {
+		if (gpio_pin_configure_dt(dev_config->wp,
+					GPIO_OUTPUT_ACTIVE)) {
+			LOG_ERR("Couldn't configure write protect pin");
+			return -ENODEV;
+		}
+		gpio_pin_set(dev_config->wp->port, dev_config->wp->pin, 1);
+	}
+#endif
 
 	acquire(dev);
 
@@ -568,53 +593,31 @@ static int spi_flash_at45_init(const struct device *dev)
 }
 
 #if IS_ENABLED(CONFIG_PM_DEVICE)
-static int spi_flash_at45_pm_control(const struct device *dev,
-				     uint32_t ctrl_command,
-				     void *context, device_pm_cb cb, void *arg)
+static int spi_flash_at45_pm_action(const struct device *dev,
+				    enum pm_device_action action)
 {
-	struct spi_flash_at45_data *dev_data = get_dev_data(dev);
 	const struct spi_flash_at45_config *dev_config = get_dev_config(dev);
-	int err = 0;
 
-	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
-		uint32_t new_state = *((const uint32_t *)context);
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		acquire(dev);
+		power_down_op(dev, CMD_EXIT_DPD, dev_config->t_exit_dpd);
+		release(dev);
+		break;
 
-		if (new_state != dev_data->pm_state) {
-			switch (new_state) {
-			case DEVICE_PM_ACTIVE_STATE:
-				acquire(dev);
-				power_down_op(dev, CMD_EXIT_DPD,
-					      dev_config->t_exit_dpd);
-				release(dev);
-				break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		acquire(dev);
+		power_down_op(dev,
+			dev_config->use_udpd ? CMD_ENTER_UDPD : CMD_ENTER_DPD,
+			dev_config->t_enter_dpd);
+		release(dev);
+		break;
 
-			case DEVICE_PM_LOW_POWER_STATE:
-			case DEVICE_PM_SUSPEND_STATE:
-			case DEVICE_PM_OFF_STATE:
-				acquire(dev);
-				power_down_op(dev,
-					dev_config->use_udpd ? CMD_ENTER_UDPD
-							     : CMD_ENTER_DPD,
-					dev_config->t_enter_dpd);
-				release(dev);
-				break;
-
-			default:
-				return -ENOTSUP;
-			}
-
-			dev_data->pm_state = new_state;
-		}
-	} else {
-		__ASSERT_NO_MSG(ctrl_command == DEVICE_PM_GET_POWER_STATE);
-		*((uint32_t *)context) = dev_data->pm_state;
+	default:
+		return -ENOTSUP;
 	}
 
-	if (cb) {
-		cb(dev, err, context, arg);
-	}
-
-	return err;
+	return 0;
 }
 #endif /* IS_ENABLED(CONFIG_PM_DEVICE) */
 
@@ -636,7 +639,21 @@ static const struct flash_driver_api spi_flash_at45_api = {
 #endif
 };
 
-#define DT_DRV_COMPAT atmel_at45
+#define INST_HAS_RESET_GPIO(idx) \
+	DT_NODE_HAS_PROP(DT_DRV_INST(idx), reset_gpios)
+
+#define INST_RESET_GPIO_SPEC(idx)					\
+	IF_ENABLED(INST_HAS_RESET_GPIO(idx),				\
+		(static const struct gpio_dt_spec reset_##idx =	\
+		GPIO_DT_SPEC_GET(DT_DRV_INST(idx), reset_gpios);))
+
+#define INST_HAS_WP_GPIO(idx) \
+	DT_NODE_HAS_PROP(DT_DRV_INST(idx), wp_gpios)
+
+#define INST_WP_GPIO_SPEC(idx)						\
+	IF_ENABLED(INST_HAS_WP_GPIO(idx),				\
+		(static const struct gpio_dt_spec wp_##idx =		\
+		GPIO_DT_SPEC_GET(DT_DRV_INST(idx), wp_gpios);))
 
 #define SPI_FLASH_AT45_INST(idx)					     \
 	enum {								     \
@@ -646,22 +663,17 @@ static const struct flash_driver_api spi_flash_at45_api = {
 	};								     \
 	static struct spi_flash_at45_data inst_##idx##_data = {		     \
 		.lock = Z_SEM_INITIALIZER(inst_##idx##_data.lock, 1, 1),     \
-		IF_ENABLED(CONFIG_PM_DEVICE, (		     \
-			.pm_state = DEVICE_PM_ACTIVE_STATE))		     \
-	};								     \
+	};						\
+	INST_RESET_GPIO_SPEC(idx)				\
+	INST_WP_GPIO_SPEC(idx)					\
 	static const struct spi_flash_at45_config inst_##idx##_config = {    \
-		.spi_bus = DT_INST_BUS_LABEL(idx),			     \
-		.spi_cfg = {						     \
-			.frequency = DT_INST_PROP(idx, spi_max_frequency),   \
-			.operation = SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | \
-				     SPI_WORD_SET(8) | SPI_LINES_SINGLE,     \
-			.slave = DT_INST_REG_ADDR(idx),			     \
-			.cs = &inst_##idx##_data.spi_cs,		     \
-		},							     \
-		IF_ENABLED(DT_INST_SPI_DEV_HAS_CS_GPIOS(idx), (		     \
-			.cs_gpio = DT_INST_SPI_DEV_CS_GPIOS_LABEL(idx),      \
-			.cs_pin  = DT_INST_SPI_DEV_CS_GPIOS_PIN(idx),	     \
-			.cs_dt_flags = DT_INST_SPI_DEV_CS_GPIOS_FLAGS(idx),)) \
+		.bus = SPI_DT_SPEC_INST_GET(				     \
+			idx, SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB |	     \
+			SPI_WORD_SET(8), 0),				     \
+		IF_ENABLED(INST_HAS_RESET_GPIO(idx),			\
+			(.reset = &reset_##idx,))			\
+		IF_ENABLED(INST_HAS_WP_GPIO(idx),			\
+			(.wp = &wp_##idx,))			\
 		IF_ENABLED(CONFIG_FLASH_PAGE_LAYOUT, (			     \
 			.pages_layout = {				     \
 				.pages_count = INST_##idx##_PAGES,	     \
@@ -687,8 +699,11 @@ static const struct flash_driver_api spi_flash_at45_api = {
 			"Page size specified for instance " #idx " of "	     \
 			"atmel,at45 is not compatible with its "	     \
 			"total size");))				     \
+									     \
+	PM_DEVICE_DT_INST_DEFINE(idx, spi_flash_at45_pm_action);	     \
+									     \
 	DEVICE_DT_INST_DEFINE(idx,					     \
-		      spi_flash_at45_init, spi_flash_at45_pm_control,	     \
+		      spi_flash_at45_init, PM_DEVICE_DT_INST_REF(idx),	     \
 		      &inst_##idx##_data, &inst_##idx##_config,		     \
 		      POST_KERNEL, CONFIG_SPI_FLASH_AT45_INIT_PRIORITY,      \
 		      &spi_flash_at45_api);

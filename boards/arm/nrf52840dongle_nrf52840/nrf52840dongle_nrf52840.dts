@@ -106,23 +106,25 @@
 	current-speed = <115200>;
 	tx-pin = <20>;
 	rx-pin = <24>;
+	rx-pull-up;
 	rts-pin = <17>;
 	cts-pin = <22>;
+	cts-pull-up;
 };
 
 &i2c0 {
 	compatible = "nordic,nrf-twi";
 	status = "okay";
-	sda-gpios = <&gpio0 26 0>;
-	scl-gpios = <&gpio0 27 0>;
+	sda-pin = <26>;
+	scl-pin = <27>;
 };
 
 &i2c1 {
 	compatible = "nordic,nrf-twi";
 	/* Cannot be used together with spi1. */
 	/* status = "okay"; */
-	sda-gpios = <&gpio0 30 0>;
-	scl-gpios = <&gpio0 31 0>;
+	sda-pin = <30>;
+	scl-pin = <31>;
 };
 
 &pwm0 {
@@ -163,7 +165,7 @@
  */
 #include "fstab-stock.dts"
 
-&usbd {
+zephyr_udc0: &usbd {
 	compatible = "nordic,nrf-usbd";
 	status = "okay";
 };

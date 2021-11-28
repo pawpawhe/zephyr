@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT grove_temperature
+#define DT_DRV_COMPAT seeed_grove_temperature
 
 #include <drivers/adc.h>
 #include <device.h>
@@ -123,6 +123,6 @@ static const struct gts_config gts_cfg = {
 	.adc_channel = DT_INST_IO_CHANNELS_INPUT(0),
 };
 
-DEVICE_DT_INST_DEFINE(0, &gts_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, &gts_init, NULL,
 		&gts_data, &gts_cfg, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
 		&gts_api);

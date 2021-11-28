@@ -216,6 +216,9 @@
 /* GICD_TYPER.ITLinesNumber 0:4 */
 #define GICD_TYPER_ITLINESNUM_MASK	0x1f
 
+/* GICD_TYPER.IDbits */
+#define GICD_TYPER_IDBITS(typer)	((((typer) >> 19) & 0x1f) + 1)
+
 /*
  * Common Helper Constants
  */
@@ -227,6 +230,11 @@
 
 
 #define GIC_SPI_INT_BASE		32
+
+#define GIC_SPI_MAX_INTID		1019
+
+#define GIC_IS_SPI(intid)		(((intid) >= GIC_SPI_INT_BASE) && \
+					((intid) <= GIC_SPI_MAX_INTID))
 
 #define GIC_NUM_INTR_PER_REG		32
 
@@ -254,12 +262,6 @@
 
 /* Fixme: update from platform specific define or dt */
 #define GIC_NUM_CPU_IF			CONFIG_MP_NUM_CPUS
-/* Fixme: arch support need to provide api/macro in SMP implementation */
-#if defined(CONFIG_ARM64) && (CONFIG_MP_NUM_CPUS > 1)
-#define GET_CPUID()			MPIDR_TO_CORE(GET_MPIDR())
-#else
-#define GET_CPUID()			0
-#endif
 
 #ifndef _ASMLANGUAGE
 

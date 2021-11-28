@@ -510,51 +510,24 @@ static size_t put_string(struct lwm2m_output_context *out,
 	return len;
 }
 
-static size_t put_float32fix(struct lwm2m_output_context *out,
+static size_t put_float(struct lwm2m_output_context *out,
 			     struct lwm2m_obj_path *path,
-			     float32_value_t *value)
+			     double *value)
 {
 	struct tlv_out_formatter_data *fd;
 	size_t len;
 	struct oma_tlv tlv;
 	int ret;
-	uint8_t b32[4];
+	uint8_t b64[8];
 
 	fd = engine_get_out_user_data(out);
 	if (!fd) {
 		return 0;
 	}
 
-	ret = lwm2m_f32_to_b32(value, b32, sizeof(b32));
+	ret = lwm2m_float_to_b64(value, b64, sizeof(b64));
 	if (ret < 0) {
 		LOG_ERR("float32 conversion error: %d", ret);
-		return 0;
-	}
-
-	tlv_setup(&tlv, tlv_calc_type(fd->writer_flags),
-		  tlv_calc_id(fd->writer_flags, path), sizeof(b32));
-	len = oma_tlv_put(&tlv, out, b32, false);
-	return len;
-}
-
-static size_t put_float64fix(struct lwm2m_output_context *out,
-			     struct lwm2m_obj_path *path,
-			     float64_value_t *value)
-{
-	struct tlv_out_formatter_data *fd;
-	size_t len;
-	struct oma_tlv tlv;
-	uint8_t b64[8];
-	int ret;
-
-	fd = engine_get_out_user_data(out);
-	if (!fd) {
-		return 0;
-	}
-
-	ret = lwm2m_f64_to_b64(value, b64, sizeof(b64));
-	if (ret < 0) {
-		LOG_ERR("float64 conversion error: %d", ret);
 		return 0;
 	}
 
@@ -674,21 +647,21 @@ static size_t get_string(struct lwm2m_input_context *in,
 }
 
 /* convert float to fixpoint */
-static size_t get_float32fix(struct lwm2m_input_context *in,
-			     float32_value_t *value)
+static size_t get_float(struct lwm2m_input_context *in,
+			double *value)
 {
 	struct oma_tlv tlv;
 	size_t size = oma_tlv_get(&tlv, in, false);
-	uint8_t b32[4];
+	uint8_t buf[8];
 	int ret;
 
 	if (size > 0) {
-		if (tlv.length != 4U) {
-			LOG_ERR("Invalid float32 length: %d", tlv.length);
+		if (tlv.length != 4U && tlv.length != 8U) {
+			LOG_ERR("Invalid float length: %d", tlv.length);
 
 			/* dummy read */
 			while (tlv.length--) {
-				if (buf_read_u8(b32,
+				if (buf_read_u8(buf,
 						CPKT_BUF_READ(in->in_cpkt),
 						&in->offset) < 0) {
 					break;
@@ -699,56 +672,21 @@ static size_t get_float32fix(struct lwm2m_input_context *in,
 		}
 
 		/* read b32 in network byte order */
-		if (buf_read(b32, tlv.length, CPKT_BUF_READ(in->in_cpkt),
+		if (buf_read(buf, tlv.length, CPKT_BUF_READ(in->in_cpkt),
 			     &in->offset) < 0) {
 			/* TODO: Generate error? */
 			return 0;
 		}
 
-		ret = lwm2m_b32_to_f32(b32, sizeof(b32), value);
+		if (tlv.length == 4U) {
+			ret = lwm2m_b32_to_float(buf, 4, value);
+		} else {
+			ret = lwm2m_b64_to_float(buf, 8, value);
+		}
+
 		if (ret < 0) {
-			LOG_ERR("binary32 conversion error: %d", ret);
-			return 0;
-		}
-	}
-
-	return size;
-}
-
-static size_t get_float64fix(struct lwm2m_input_context *in,
-			     float64_value_t *value)
-{
-	struct oma_tlv tlv;
-	size_t size = oma_tlv_get(&tlv, in, false);
-	uint8_t b64[8];
-	int ret;
-
-	if (size > 0) {
-		if (tlv.length != 8U) {
-			LOG_ERR("invalid float64 length: %d", tlv.length);
-
-			/* dummy read */
-			while (tlv.length--) {
-				if (buf_read_u8(b64,
-						CPKT_BUF_READ(in->in_cpkt),
-						&in->offset) < 0) {
-					break;
-				}
-			}
-
-			return 0;
-		}
-
-		/* read b64 in network byte order */
-		if (buf_read(b64, tlv.length, CPKT_BUF_READ(in->in_cpkt),
-			     &in->offset) < 0) {
-			/* TODO: Generate error? */
-			return 0;
-		}
-
-		ret = lwm2m_b64_to_f64(b64, sizeof(b64), value);
-		if (ret < 0) {
-			LOG_ERR("binary64 conversion error: %d", ret);
+			LOG_ERR("binary%s conversion error: %d",
+				tlv.length == 4U ? "32" : "64", ret);
 			return 0;
 		}
 	}
@@ -814,8 +752,7 @@ const struct lwm2m_writer oma_tlv_writer = {
 	.put_s32 = put_s32,
 	.put_s64 = put_s64,
 	.put_string = put_string,
-	.put_float32fix = put_float32fix,
-	.put_float64fix = put_float64fix,
+	.put_float = put_float,
 	.put_bool = put_bool,
 	.put_opaque = put_opaque,
 	.put_objlnk = put_objlnk,
@@ -825,8 +762,7 @@ const struct lwm2m_reader oma_tlv_reader = {
 	.get_s32 = get_s32,
 	.get_s64 = get_s64,
 	.get_string = get_string,
-	.get_float32fix = get_float32fix,
-	.get_float64fix = get_float64fix,
+	.get_float = get_float,
 	.get_bool = get_bool,
 	.get_opaque = get_opaque,
 	.get_objlnk = get_objlnk,
@@ -935,6 +871,33 @@ error:
 	return ret;
 }
 
+static int write_tlv_resource(struct lwm2m_message *msg, struct oma_tlv *tlv)
+{
+	int ret;
+
+	if (msg->in.block_ctx) {
+		msg->in.block_ctx->res_id = tlv->id;
+	}
+
+	msg->path.res_id = tlv->id;
+	msg->path.level = 3U;
+	ret = do_write_op_tlv_item(msg);
+
+	/*
+	 * ignore errors for CREATE op
+	 * for OP_CREATE and BOOTSTRAP WRITE: errors on
+	 * optional resources are ignored (ENOTSUP)
+	 */
+	if (ret < 0 &&
+	    !((ret == -ENOTSUP) &&
+	      (msg->ctx->bootstrap_mode ||
+	       msg->operation == LWM2M_OP_CREATE))) {
+		return ret;
+	}
+
+	return 0;
+}
+
 int do_write_op_tlv(struct lwm2m_message *msg)
 {
 	struct lwm2m_engine_obj_inst *obj_inst = NULL;
@@ -942,16 +905,19 @@ int do_write_op_tlv(struct lwm2m_message *msg)
 	struct oma_tlv tlv;
 	int ret;
 
-	/* In case of Firmware object Package resource go directly to the
+	/* In case of block transfer go directly to the
 	 * message processing - consecutive blocks will not carry the TLV
 	 * header.
 	 */
-	if (msg->in.block_ctx != NULL && msg->in.block_ctx->ctx.current > 0 &&
-	    msg->path.obj_id == 5 && msg->path.res_id == 0) {
+	if (msg->in.block_ctx != NULL && msg->in.block_ctx->ctx.current > 0) {
+		msg->path.res_id = msg->in.block_ctx->res_id;
+		msg->path.level = 3U;
 		ret = do_write_op_tlv_item(msg);
 		if (ret < 0) {
 			return ret;
 		}
+
+		return 0;
 	}
 
 	while (true) {
@@ -995,36 +961,16 @@ int do_write_op_tlv(struct lwm2m_message *msg)
 					continue;
 				}
 
-				msg->path.res_id = tlv2.id;
-				msg->path.level = 3U;
-				ret = do_write_op_tlv_item(msg);
-				/*
-				 * ignore errors for CREATE op
-				 * for OP_CREATE and BOOTSTRAP WRITE: errors on
-				 * optional resources are ignored (ENOTSUP)
-				 */
-				if (ret < 0 &&
-				    !((ret == -ENOTSUP) &&
-				      (msg->ctx->bootstrap_mode ||
-				       msg->operation == LWM2M_OP_CREATE))) {
+				ret = write_tlv_resource(msg, &tlv2);
+				if (ret) {
 					return ret;
 				}
 
 				pos += len2;
 			}
 		} else if (tlv.type == OMA_TLV_TYPE_RESOURCE) {
-			msg->path.res_id = tlv.id;
-			msg->path.level = 3U;
-			ret = do_write_op_tlv_item(msg);
-			/*
-			 * ignore errors for CREATE op
-			 * for OP_CREATE and BOOTSTRAP WRITE: errors on optional
-			 * resources are ignored (ENOTSUP)
-			 */
-			if (ret < 0 &&
-			    !((ret == -ENOTSUP) &&
-			      (msg->ctx->bootstrap_mode ||
-			       msg->operation == LWM2M_OP_CREATE))) {
+			ret = write_tlv_resource(msg, &tlv);
+			if (ret) {
 				return ret;
 			}
 		} else {

@@ -38,7 +38,7 @@ config NET_NATIVE_UDP
 	default y if NET_UDP
 
 config NET_OFFLOAD
-	bool "Offload IP stack [EXPERIMENTAL]"
+	bool "Offload IP stack"
 	help
 	  Enables TCP/IP stack to be offload to a co-processor.
 
@@ -140,9 +140,12 @@ config NET_SHELL_DYN_CMD_COMPLETION
 
 config NET_TC_TX_COUNT
 	int "How many Tx traffic classes to have for each network device"
-	default 1
-	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
-	range 1 8
+	default 1 if USERSPACE || USB_DEVICE_NETWORK
+	default 0
+	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && USERSPACE
+	range 0 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
+	range 1 8 if USERSPACE
+	range 0 8
 	help
 	  Define how many Tx traffic classes (queues) the system should have
 	  when sending a network packet. The network packet priority can then
@@ -153,12 +156,18 @@ config NET_TC_TX_COUNT
 	  The default value is 1 which means that all the network traffic is
 	  handled equally. In this implementation, the higher traffic class
 	  value corresponds to lower thread priority.
+	  If you select 0 here, then it means that all the network traffic
+	  is pushed to the driver directly without any queues.
+	  Note that if USERSPACE support is enabled, then currently we need to
+	  enable at least 1 TX thread.
 
 config NET_TC_RX_COUNT
 	int "How many Rx traffic classes to have for each network device"
 	default 1
-	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
-	range 1 8
+	range 1 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8 && USERSPACE
+	range 0 NET_TC_NUM_PRIORITIES if NET_TC_NUM_PRIORITIES<=8
+	range 1 8 if USERSPACE
+	range 0 8
 	help
 	  Define how many Rx traffic classes (queues) the system should have
 	  when receiving a network packet. The network packet priority can then
@@ -169,6 +178,23 @@ config NET_TC_RX_COUNT
 	  The default value is 1 which means that all the network traffic is
 	  handled equally. In this implementation, the higher traffic class
 	  value corresponds to lower thread priority.
+	  If you select 0 here, then it means that all the network traffic
+	  is pushed from the driver to application thread without any
+	  intermediate RX queue. There is always a receive socket queue between
+	  device driver and application. Disabling RX thread means that the
+	  network device driver, that is typically running in IRQ context, will
+	  handle the packet all the way to the application. This might cause
+	  other incoming packets to be lost if the RX processing takes long
+	  time.
+	  Note that if USERSPACE support is enabled, then currently we need to
+	  enable at least 1 RX thread.
+
+config NET_TC_SKIP_FOR_HIGH_PRIO
+	bool "Push high priority packets directly to network driver"
+	help
+	  If this is set, then high priority (NET_PRIORITY_CA) net_pkt will be
+	  pushed directly to network driver and will skip the traffic class
+	  queues. This is currently not enabled by default.
 
 choice NET_TC_THREAD_TYPE
 	prompt "How the network RX/TX threads should work"
@@ -185,6 +211,7 @@ config NET_TC_THREAD_COOPERATIVE
 config NET_TC_THREAD_PREEMPTIVE
 	bool "Use pre-emptive TX/RX threads [EXPERIMENTAL]"
 	depends on PREEMPT_ENABLED
+	select EXPERIMENTAL
 	help
 	  With pre-emptive threads, the thread can be pre-empted.
 
@@ -396,7 +423,7 @@ config NET_TCP_RETRY_COUNT
 
 config NET_TCP_MAX_SEND_WINDOW_SIZE
 	int "Maximum sending window size to use"
-	depends on NET_TCP2
+	depends on NET_TCP
 	default 0
 	range 0 65535
 	help
@@ -406,7 +433,7 @@ config NET_TCP_MAX_SEND_WINDOW_SIZE
 
 config NET_TCP_RECV_QUEUE_TIMEOUT
 	int "How long to queue received data (in ms)"
-	depends on NET_TCP2
+	depends on NET_TCP
 	default 100
 	range 0 10000
 	help
@@ -433,15 +460,12 @@ config NET_TCP_ISN_RFC6528
 	default y
 	depends on NET_TCP
 	select MBEDTLS
+	select MBEDTLS_MD
+	select MBEDTLS_MAC_MD5_ENABLED
 	help
 	  Implement Initial Sequence Number calculation as described in
 	  RFC 6528 chapter 3. https://tools.ietf.org/html/rfc6528
 	  If this is not set, then sys_rand32_get() is used for ISN value.
-
-config NET_TCP2
-	bool
-	default y
-	depends on NET_TCP
 
 config NET_TEST_PROTOCOL
 	bool "Enable JSON based test protocol (UDP)"
@@ -526,13 +550,6 @@ config NET_CONTEXT_PRIORITY
 	help
 	  It is possible to prioritize network traffic. This requires
 	  also traffic class support to work as expected.
-
-config NET_CONTEXT_TIMESTAMP
-	bool "Add timestamp support to net_context"
-	select NET_PKT_TIMESTAMP
-	help
-	  It is possible to timestamp outgoing packets and get information
-	  about these timestamps.
 
 config NET_CONTEXT_TXTIME
 	bool "Add TXTIME support to net_context"
@@ -643,6 +660,7 @@ config NET_BUF_FIXED_DATA_SIZE
 
 config NET_BUF_VARIABLE_DATA_SIZE
 	bool "Variable data size buffer [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	help
 	  The buffer is dynamically allocated from runtime requested size.
 
@@ -730,7 +748,7 @@ config NET_PKT_TIMESTAMP
 
 config NET_PKT_TIMESTAMP_THREAD
 	bool "Create TX timestamp thread"
-	default y if NET_GPTP
+	default y if NET_L2_PTP
 	depends on NET_PKT_TIMESTAMP
 	help
 	  Create a TX timestamp thread that will pass the timestamped network
@@ -804,7 +822,7 @@ config NET_PKT_TXTIME_STATS_DETAIL
 	  command.
 
 config NET_PROMISCUOUS_MODE
-	bool "Enable promiscuous mode support [EXPERIMENTAL]"
+	bool "Enable promiscuous mode support"
 	select NET_MGMT
 	select NET_MGMT_EVENT
 	select NET_L2_ETHERNET_MGMT if NET_L2_ETHERNET
@@ -820,6 +838,12 @@ module-str = Log level for promiscuous mode
 module-help = Enables promiscuous mode to output debug messages.
 source "subsys/net/Kconfig.template.log_config.net"
 endif # NET_PROMISCUOUS_MODE
+
+config NET_DISABLE_ICMP_DESTINATION_UNREACHABLE
+	bool "Disable destination unreachable ICMP errors"
+	help
+	  Suppress the generation of ICMP destination unreachable errors
+	  when ports that are not in a listening state receive packets.
 
 source "subsys/net/ip/Kconfig.stack"
 

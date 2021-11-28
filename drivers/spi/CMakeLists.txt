@@ -2,6 +2,7 @@
 
 zephyr_library()
 
+zephyr_library_sources_ifdef(CONFIG_SPI_TELINK_B91  spi_b91.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_CC13XX_CC26XX		spi_cc13xx_cc26xx.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_DW		spi_dw.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_EMUL		spi_emul.c)
@@ -23,5 +24,7 @@ zephyr_library_sources_ifdef(CONFIG_SPI_GECKO		spi_gecko.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_XLNX_AXI_QUADSPI spi_xlnx_axi_quadspi.c)
 zephyr_library_sources_ifdef(CONFIG_ESP32_SPIM		spi_esp32_spim.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_TEST		spi_test.c)
+zephyr_library_sources_ifdef(CONFIG_SPI_PSOC6		spi_psoc6.c)
+zephyr_library_sources_ifdef(CONFIG_SPI_NPCX_FIU	spi_npcx_fiu.c)
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE		spi_handlers.c)

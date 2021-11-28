@@ -26,6 +26,7 @@ GEN_ABS_SYM_BEGIN(_OffsetAbsSyms)
 GEN_OFFSET_SYM(_cpu_t, current);
 GEN_OFFSET_SYM(_cpu_t, nested);
 GEN_OFFSET_SYM(_cpu_t, irq_stack);
+GEN_OFFSET_SYM(_cpu_t, arch);
 
 GEN_ABSOLUTE_SYM(___cpu_t_SIZEOF, sizeof(struct _cpu));
 
@@ -39,7 +40,9 @@ GEN_OFFSET_SYM(_kernel_t, threads);
 GEN_OFFSET_SYM(_kernel_t, idle);
 #endif
 
+#ifndef CONFIG_SCHED_CPU_MASK_PIN_ONLY
 GEN_OFFSET_SYM(_kernel_t, ready_q);
+#endif
 
 #ifndef CONFIG_SMP
 GEN_OFFSET_SYM(_ready_q_t, cache);

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT nios2_i2c
+#define DT_DRV_COMPAT altr_nios2_i2c
 
 #include <errno.h>
 #include <drivers/i2c.h>
@@ -165,7 +165,7 @@ static struct i2c_nios2_config i2c_nios2_cfg = {
 	},
 };
 
-DEVICE_DT_INST_DEFINE(0, &i2c_nios2_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, &i2c_nios2_init, NULL,
 		    NULL, &i2c_nios2_cfg,
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &i2c_nios2_driver_api);

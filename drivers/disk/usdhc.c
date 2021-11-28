@@ -388,6 +388,8 @@ struct usdhc_config {
 	uint8_t detect_pin;
 	gpio_dt_flags_t detect_flags;
 
+	bool no_1_8_v;
+
 	uint32_t data_timeout;
 	/* Data timeout value
 	 */
@@ -2254,7 +2256,6 @@ static void usdhc_host_reset(struct usdhc_priv *priv)
 	usdhc_enable_ddr_mode(base, false, 0);
 	usdhc_tuning(base, SDHC_STANDARD_TUNING_START, SDHC_TUINIG_STEP, false);
 #if FSL_FEATURE_USDHC_HAS_HS400_MODE
-#error Not implemented!
 	/* Disable HS400 mode */
 	/* Disable DLL */
 #endif
@@ -2339,8 +2340,10 @@ static int usdhc_sd_init(struct usdhc_priv *priv)
 	/* allow user select the work voltage, if not select,
 	 * sdmmc will handle it automatically
 	 */
-	if (USDHC_SUPPORT_V180_FLAG != SDMMCHOST_NOT_SUPPORT) {
-		app_cmd_41_arg |= SD_OCR_SWITCH_18_REQ_FLAG;
+	if (priv->config->no_1_8_v == false) {
+		if (USDHC_SUPPORT_V180_FLAG != SDMMCHOST_NOT_SUPPORT) {
+			app_cmd_41_arg |= SD_OCR_SWITCH_18_REQ_FLAG;
+		}
 	}
 
 	/* Check card's supported interface condition. */
@@ -2387,9 +2390,12 @@ APP_SEND_OP_COND_AGAIN:
 		if (cmd->response[0U] & SD_OCR_CARD_CAP_FLAG) {
 			priv->card_info.card_flags |= SDHC_HIGH_CAPACITY_FLAG;
 		}
-		/* 1.8V support */
-		if (cmd->response[0U] & SD_OCR_SWITCH_18_ACCEPT_FLAG) {
-			priv->card_info.card_flags |= SDHC_1800MV_FLAG;
+
+		if (priv->config->no_1_8_v == false) {
+			/* 1.8V support */
+			if (cmd->response[0U] & SD_OCR_SWITCH_18_ACCEPT_FLAG) {
+				priv->card_info.card_flags |= SDHC_1800MV_FLAG;
+			}
 		}
 		priv->card_info.raw_ocr = cmd->response[0U];
 	} else {
@@ -2593,8 +2599,9 @@ static K_MUTEX_DEFINE(z_usdhc_init_lock);
 static int usdhc_board_access_init(struct usdhc_priv *priv)
 {
 	const struct usdhc_config *config = priv->config;
-	int ret;
+	int ret = 0;
 	uint32_t gpio_level;
+	USDHC_Type *base = config->base;
 
 	if (config->pwr_name) {
 		priv->pwr_gpio = device_get_binding(config->pwr_name);
@@ -2627,34 +2634,40 @@ static int usdhc_board_access_init(struct usdhc_priv *priv)
 	}
 
 	if (!priv->detect_gpio) {
-		LOG_INF("USDHC detection other than GPIO not implemented!");
-		return 0;
+		LOG_INF("USDHC detection other than GPIO");
+		/* DATA3 does not monitor card insertion */
+		base->PROT_CTRL &= ~USDHC_PROT_CTRL_D3CD_MASK;
+		if ((base->PRES_STATE & USDHC_PRES_STATE_CINST_MASK) != 0) {
+			priv->inserted = true;
+		} else {
+			priv->inserted = false;
+			return -ENODEV;
+		}
+	} else {
+		ret = usdhc_cd_gpio_init(priv->detect_gpio,
+				config->detect_pin,
+				config->detect_flags,
+				&priv->detect_cb);
+		if (ret) {
+			return ret;
+		}
+		ret = gpio_pin_get(priv->detect_gpio, config->detect_pin);
+		if (ret < 0) {
+			return ret;
+		}
+
+		gpio_level = ret;
+
+		if (gpio_level == 0) {
+			priv->inserted = false;
+			LOG_ERR("NO SD inserted!");
+
+			return -ENODEV;
+		}
+
+		priv->inserted = true;
+		LOG_INF("SD inserted!");
 	}
-
-	ret = usdhc_cd_gpio_init(priv->detect_gpio,
-			config->detect_pin,
-			config->detect_flags,
-			&priv->detect_cb);
-	if (ret) {
-		return ret;
-	}
-	ret = gpio_pin_get(priv->detect_gpio, config->detect_pin);
-	if (ret < 0) {
-		return ret;
-	}
-
-	gpio_level = ret;
-
-	if (gpio_level == 0) {
-		priv->inserted = false;
-		LOG_ERR("NO SD inserted!");
-
-		return -ENODEV;
-	}
-
-	priv->inserted = true;
-	LOG_INF("SD inserted!");
-
 	return 0;
 }
 
@@ -2831,6 +2844,7 @@ static int disk_usdhc_init(const struct device *dev)
 		.nusdhc = n,						\
 		DISK_ACCESS_USDHC_INIT_PWR(n)				\
 		DISK_ACCESS_USDHC_INIT_CD(n)				\
+		.no_1_8_v = DT_INST_PROP(n, no_1_8_v),			\
 		.data_timeout = USDHC_DATA_TIMEOUT,			\
 		.endian = USDHC_LITTLE_ENDIAN,				\
 		.read_watermark = USDHC_READ_WATERMARK_LEVEL,		\
@@ -2843,7 +2857,7 @@ static int disk_usdhc_init(const struct device *dev)
 									\
 	DEVICE_DT_INST_DEFINE(n,					\
 			    &disk_usdhc_init,				\
-			    device_pm_control_nop,			\
+			    NULL,					\
 			    &usdhc_priv_##n,				\
 			    &usdhc_config_##n,				\
 			    POST_KERNEL,				\

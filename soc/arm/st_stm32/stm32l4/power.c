@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <zephyr.h>
-#include <power/power.h>
+#include <pm/pm.h>
 #include <soc.h>
 #include <init.h>
 
@@ -15,19 +15,20 @@
 #include <stm32l4xx_ll_rcc.h>
 #include <stm32l4xx_ll_system.h>
 #include <clock_control/clock_stm32_ll_common.h>
+#include <drivers/clock_control/stm32_clock_control.h>
 
 #include <logging/log.h>
 LOG_MODULE_DECLARE(soc, CONFIG_SOC_LOG_LEVEL);
 
 /* select MSI as wake-up system clock if configured, HSI otherwise */
-#if defined(CONFIG_CLOCK_STM32_SYSCLK_SRC_MSI)
+#if STM32_SYSCLK_SRC_MSI
 #define RCC_STOP_WAKEUPCLOCK_SELECTED LL_RCC_STOP_WAKEUPCLOCK_MSI
 #else
 #define RCC_STOP_WAKEUPCLOCK_SELECTED LL_RCC_STOP_WAKEUPCLOCK_HSI
 #endif
 
 /* Invoke Low Power/System Off specific Tasks */
-void pm_power_state_set(struct pm_state_info info)
+__weak void pm_power_state_set(struct pm_state_info info)
 {
 	if (info.state != PM_STATE_SUSPEND_TO_IDLE) {
 		LOG_DBG("Unsupported power state %u", info.state);
@@ -73,7 +74,7 @@ void pm_power_state_set(struct pm_state_info info)
 }
 
 /* Handle SOC specific activity after Low Power Mode Exit */
-void pm_power_state_exit_post_ops(struct pm_state_info info)
+__weak void pm_power_state_exit_post_ops(struct pm_state_info info)
 {
 	if (info.state != PM_STATE_SUSPEND_TO_IDLE) {
 		LOG_DBG("Unsupported power substate-id %u", info.state);

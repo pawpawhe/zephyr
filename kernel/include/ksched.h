@@ -141,13 +141,15 @@ static inline bool z_is_thread_queued(struct k_thread *thread)
 static inline void z_mark_thread_as_suspended(struct k_thread *thread)
 {
 	thread->base.thread_state |= _THREAD_SUSPENDED;
-	sys_trace_thread_suspend(thread);
+
+	SYS_PORT_TRACING_FUNC(k_thread, sched_suspend, thread);
 }
 
 static inline void z_mark_thread_as_not_suspended(struct k_thread *thread)
 {
 	thread->base.thread_state &= ~_THREAD_SUSPENDED;
-	sys_trace_thread_resume(thread);
+
+	SYS_PORT_TRACING_FUNC(k_thread, sched_resume, thread);
 }
 
 static inline void z_mark_thread_as_started(struct k_thread *thread)
@@ -248,27 +250,22 @@ static inline void _ready_one_thread(_wait_q_t *wq)
 
 static inline void z_sched_lock(void)
 {
-#ifdef CONFIG_PREEMPT_ENABLED
 	__ASSERT(!arch_is_in_isr(), "");
 	__ASSERT(_current->base.sched_locked != 1U, "");
 
 	--_current->base.sched_locked;
 
 	compiler_barrier();
-
-#endif
 }
 
 static ALWAYS_INLINE void z_sched_unlock_no_reschedule(void)
 {
-#ifdef CONFIG_PREEMPT_ENABLED
 	__ASSERT(!arch_is_in_isr(), "");
 	__ASSERT(_current->base.sched_locked != 0U, "");
 
 	compiler_barrier();
 
 	++_current->base.sched_locked;
-#endif
 }
 
 static ALWAYS_INLINE bool z_is_thread_timeout_expired(struct k_thread *thread)
@@ -365,5 +362,38 @@ static inline bool z_sched_wake_all(_wait_q_t *wait_q, int swap_retval,
  */
 int z_sched_wait(struct k_spinlock *lock, k_spinlock_key_t key,
 		 _wait_q_t *wait_q, k_timeout_t timeout, void **data);
+
+
+/** @brief Halt thread cycle usage accounting.
+ *
+ * Halts the accumulation of thread cycle usage and adds the current
+ * total to the thread's counter.  Called on context switch.
+ *
+ * Note that this function is idempotent.  The core kernel code calls
+ * it at the end of interrupt handlers (because that is where we have
+ * a portable hook) where we are context switching, which will include
+ * any cycles spent in the ISR in the per-thread accounting.  But
+ * architecture code can also call it earlier out of interrupt entry
+ * to improve measurement fidelity.
+ *
+ * This function assumes local interrupts are masked (so that the
+ * current CPU pointer and current thread are safe to modify), but
+ * requires no other synchronizaton.  Architecture layers don't need
+ * to do anything more.
+ */
+void z_sched_usage_stop(void);
+
+void z_sched_usage_start(struct k_thread *thread);
+
+uint64_t z_sched_thread_usage(struct k_thread *thread);
+
+static inline void z_sched_usage_switch(struct k_thread *thread)
+{
+	ARG_UNUSED(thread);
+#ifdef CONFIG_SCHED_THREAD_USAGE
+	z_sched_usage_stop();
+	z_sched_usage_start(thread);
+#endif
+}
 
 #endif /* ZEPHYR_KERNEL_INCLUDE_KSCHED_H_ */

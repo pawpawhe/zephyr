@@ -3,7 +3,6 @@
 menuconfig WIFI_ESP32
 	bool "ESP32 SoC WiFi support"
 	select THREAD_CUSTOM_DATA
-	select DYNAMIC_INTERRUPTS
 	help
 	  Enable ESP32 SoC WiFi support.
 
@@ -224,5 +223,21 @@ config ESP32_WIFI_SW_COEXIST_ENABLE
 	bool
 	help
 	  Software controls WiFi/Bluetooth coexistence. Not supported yet.
+
+config ESP32_WIFI_IRAM_OPT
+	bool "WiFi IRAM speed optimization"
+	default y
+	help
+	  Select this option to place frequently called Wi-Fi library functions in IRAM.
+	  When this option is disabled, more than 10Kbytes of IRAM memory will be saved
+	  but Wi-Fi throughput will be reduced.
+
+config ESP32_WIFI_RX_IRAM_OPT
+	bool "WiFi RX IRAM speed optimization"
+	default y
+	help
+	  Select this option to place frequently called Wi-Fi library RX functions in IRAM.
+	  When this option is disabled, more than 17Kbytes of IRAM memory will be saved
+	  but Wi-Fi performance will be reduced.
 
 endif # WIFI_ESP32

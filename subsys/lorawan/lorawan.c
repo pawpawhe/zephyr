@@ -12,6 +12,7 @@
 #include "lw_priv.h"
 
 #include <LoRaMac.h>
+#include <Region.h>
 
 BUILD_ASSERT(!IS_ENABLED(CONFIG_LORAMAC_REGION_UNKNOWN),
 	     "Unknown region specified for LoRaWAN in Kconfig");
@@ -59,10 +60,9 @@ K_MUTEX_DEFINE(lorawan_send_mutex);
  */
 static enum lorawan_datarate default_datarate;
 static enum lorawan_datarate current_datarate;
-static uint8_t lorawan_conf_msg_tries = 1;
 static bool lorawan_adr_enable;
 
-
+static sys_slist_t dl_callbacks;
 
 static LoRaMacPrimitives_t macPrimitives;
 static LoRaMacCallback_t macCallbacks;
@@ -74,6 +74,11 @@ static LoRaMacEventInfoStatus_t last_mlme_indication_status;
 
 static uint8_t (*getBatteryLevelUser)(void);
 static void (*dr_change_cb)(enum lorawan_datarate dr);
+
+void BoardGetUniqueId(uint8_t *id)
+{
+	/* Do not change the default value */
+}
 
 static uint8_t getBatteryLevelLocal(void)
 {
@@ -124,14 +129,13 @@ static void McpsConfirm(McpsConfirm_t *mcpsConfirm)
 	}
 
 	last_mcps_confirm_status = mcpsConfirm->Status;
-	/* mcps_confirm_sem is only blocked on in the MCPS_CONFIRMED case */
-	if (mcpsConfirm->McpsRequest == MCPS_CONFIRMED) {
-		k_sem_give(&mcps_confirm_sem);
-	}
+	k_sem_give(&mcps_confirm_sem);
 }
 
 static void McpsIndication(McpsIndication_t *mcpsIndication)
 {
+	struct lorawan_downlink_cb *cb;
+
 	LOG_DBG("Received McpsIndication %d", mcpsIndication->McpsIndication);
 
 	if (mcpsIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK) {
@@ -145,17 +149,19 @@ static void McpsIndication(McpsIndication_t *mcpsIndication)
 		datarate_observe(false);
 	}
 
-	/* TODO: Check MCPS Indication type */
-	if (mcpsIndication->RxData == true) {
-		if (mcpsIndication->BufferSize != 0) {
-			LOG_DBG("Rx Data: %s",
-				log_strdup(mcpsIndication->Buffer));
+	/* Iterate over all registered downlink callbacks */
+	SYS_SLIST_FOR_EACH_CONTAINER(&dl_callbacks, cb, node) {
+		if ((cb->port == LW_RECV_PORT_ANY) ||
+		    (cb->port == mcpsIndication->Port)) {
+			cb->cb(mcpsIndication->Port,
+			       !!mcpsIndication->FramePending,
+			       mcpsIndication->Rssi, mcpsIndication->Snr,
+			       mcpsIndication->BufferSize,
+			       mcpsIndication->Buffer);
 		}
 	}
 
 	last_mcps_indication_status = mcpsIndication->Status;
-
-	/* TODO: Compliance test based on FPort value*/
 }
 
 static void MlmeConfirm(MlmeConfirm_t *mlmeConfirm)
@@ -204,6 +210,7 @@ static LoRaMacStatus_t lorawan_join_otaa(
 
 	mlme_req.Type = MLME_JOIN;
 	mlme_req.Req.Join.Datarate = default_datarate;
+	mlme_req.Req.Join.NetworkActivation = ACTIVATION_TYPE_OTAA;
 
 	mib_req.Type = MIB_DEV_EUI;
 	mib_req.Param.DevEui = join_cfg->dev_eui;
@@ -218,7 +225,7 @@ static LoRaMacStatus_t lorawan_join_otaa(
 	LoRaMacMibSetRequestConfirm(&mib_req);
 
 	mib_req.Type = MIB_APP_KEY;
-	mib_req.Param.JoinEui = join_cfg->otaa.app_key;
+	mib_req.Param.AppKey = join_cfg->otaa.app_key;
 	LoRaMacMibSetRequestConfirm(&mib_req);
 
 	return LoRaMacMlmeRequest(&mlme_req);
@@ -430,7 +437,13 @@ void lorawan_enable_adr(bool enable)
 
 int lorawan_set_conf_msg_tries(uint8_t tries)
 {
-	lorawan_conf_msg_tries = tries;
+	MibRequestConfirm_t mib_req;
+
+	mib_req.Type = MIB_CHANNELS_NB_TRANS;
+	mib_req.Param.ChannelsNbTrans = tries;
+	if (LoRaMacMibSetRequestConfirm(&mib_req) != LORAMAC_STATUS_OK) {
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -472,7 +485,6 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len, uint8_t flags)
 			mcpsReq.Req.Confirmed.fPort = port;
 			mcpsReq.Req.Confirmed.fBuffer = data;
 			mcpsReq.Req.Confirmed.fBufferSize = len;
-			mcpsReq.Req.Confirmed.NbTrials = lorawan_conf_msg_tries;
 			mcpsReq.Req.Confirmed.Datarate = current_datarate;
 		} else {
 			/* default message type */
@@ -492,26 +504,22 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len, uint8_t flags)
 	}
 
 	/*
-	 * Indicate to the application that the current packet is not sent and
+	 * Always wait for MAC operations to complete.
+	 * We can be sure that the semaphore will be released for
+	 * both success and failure cases after a specific time period.
+	 * So we can use K_FOREVER and no need to check the return val.
+	 */
+	k_sem_take(&mcps_confirm_sem, K_FOREVER);
+	if (last_mcps_confirm_status != LORAMAC_EVENT_INFO_STATUS_OK) {
+		ret = lorawan_eventinfo2errno(last_mcps_confirm_status);
+	}
+
+	/*
+	 * Indicate to the application that the provided data was not sent and
 	 * it has to resend the packet.
 	 */
 	if (empty_frame) {
 		ret = -EAGAIN;
-		goto out;
-	}
-
-	/* Wait for send confirmation */
-	if (flags & LORAWAN_MSG_CONFIRMED) {
-		/*
-		 * We can be sure that the semaphore will be released for
-		 * both success and failure cases after a specific time period.
-		 * So we can use K_FOREVER and no need to check the return val.
-		 */
-		k_sem_take(&mcps_confirm_sem, K_FOREVER);
-
-		if (last_mcps_confirm_status != LORAMAC_EVENT_INFO_STATUS_OK) {
-			ret = lorawan_eventinfo2errno(last_mcps_confirm_status);
-		}
 	}
 
 out:
@@ -528,6 +536,11 @@ int lorawan_set_battery_level_callback(uint8_t (*battery_lvl_cb)(void))
 	getBatteryLevelUser = battery_lvl_cb;
 
 	return 0;
+}
+
+void lorawan_register_downlink_callback(struct lorawan_downlink_cb *cb)
+{
+	sys_slist_append(&dl_callbacks, &cb->node);
 }
 
 void lorawan_register_dr_changed_callback(void (*cb)(enum lorawan_datarate))
@@ -567,13 +580,15 @@ static int lorawan_init(const struct device *dev)
 {
 	LoRaMacStatus_t status;
 
+	sys_slist_init(&dl_callbacks);
+
 	macPrimitives.MacMcpsConfirm = McpsConfirm;
 	macPrimitives.MacMcpsIndication = McpsIndication;
 	macPrimitives.MacMlmeConfirm = MlmeConfirm;
 	macPrimitives.MacMlmeIndication = MlmeIndication;
 	macCallbacks.GetBatteryLevel = getBatteryLevelLocal;
 	macCallbacks.GetTemperatureLevel = NULL;
-	macCallbacks.NvmContextChange = NULL;
+	macCallbacks.NvmDataChange = NULL;
 	macCallbacks.MacProcessNotify = OnMacProcessNotify;
 
 	status = LoRaMacInitialization(&macPrimitives, &macCallbacks,

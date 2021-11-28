@@ -257,6 +257,10 @@ static void rf2xx_process_rx_frame(const struct device *dev)
 {
 	struct rf2xx_context *ctx = dev->data;
 
+	/*
+	 * NOTE: In promiscuous mode invalid frames will be processed.
+	 */
+
 	if (ctx->trx_model != RF2XX_TRX_MODEL_231) {
 		rf2xx_trx_rx(dev);
 	} else {
@@ -537,9 +541,32 @@ static int rf2xx_tx(const struct device *dev,
 	struct rf2xx_context *ctx = dev->data;
 	int response = 0;
 
-	if (mode != IEEE802154_TX_MODE_CSMA_CA) {
-		NET_ERR("TX mode %d not supported", mode);
-		return -ENOTSUP;
+	if (ctx->tx_mode != mode) {
+		switch (mode) {
+		case IEEE802154_TX_MODE_DIRECT:
+			/* skip retries & csma/ca algorithm */
+			rf2xx_iface_reg_write(dev, RF2XX_XAH_CTRL_0_REG, 0x0E);
+			break;
+		case IEEE802154_TX_MODE_CSMA_CA:
+			/* backoff maxBE = 5, minBE = 3 */
+			rf2xx_iface_reg_write(dev, RF2XX_CSMA_BE_REG, 0x53);
+			/* max frame retries = 3, csma/ca retries = 4 */
+			rf2xx_iface_reg_write(dev, RF2XX_XAH_CTRL_0_REG, 0x38);
+			break;
+		case IEEE802154_TX_MODE_CCA:
+			/* backoff period = 0 */
+			rf2xx_iface_reg_write(dev, RF2XX_CSMA_BE_REG, 0x00);
+			/* no frame retries & no csma/ca retries */
+			rf2xx_iface_reg_write(dev, RF2XX_XAH_CTRL_0_REG, 0x00);
+			break;
+		case IEEE802154_TX_MODE_TXTIME:
+		case IEEE802154_TX_MODE_TXTIME_CCA:
+		default:
+			NET_ERR("TX mode %d not supported", mode);
+			return -ENOTSUP;
+		}
+
+		ctx->tx_mode = mode;
 	}
 
 	rf2xx_trx_set_tx_state(dev);
@@ -611,15 +638,73 @@ static int rf2xx_stop(const struct device *dev)
 	return 0;
 }
 
+static int rf2xx_pan_coord_set(const struct device *dev, bool pan_coordinator)
+{
+	uint8_t reg;
+
+	if (pan_coordinator) {
+		reg = rf2xx_iface_reg_read(dev, RF2XX_CSMA_SEED_1_REG);
+		reg |= (1 << RF2XX_AACK_I_AM_COORD);
+		rf2xx_iface_reg_write(dev, RF2XX_CSMA_SEED_1_REG, reg);
+	} else {
+		reg = rf2xx_iface_reg_read(dev, RF2XX_CSMA_SEED_1_REG);
+		reg &= ~(1 << RF2XX_AACK_I_AM_COORD);
+		rf2xx_iface_reg_write(dev, RF2XX_CSMA_SEED_1_REG, reg);
+	}
+
+	return 0;
+}
+
+static int rf2xx_promiscuous_set(const struct device *dev, bool promiscuous)
+{
+	uint8_t reg;
+
+	if (promiscuous) {
+		reg = rf2xx_iface_reg_read(dev, RF2XX_XAH_CTRL_1_REG);
+		reg |= (1 << RF2XX_AACK_PROM_MODE);
+		rf2xx_iface_reg_write(dev, RF2XX_XAH_CTRL_1_REG, reg);
+
+		reg = rf2xx_iface_reg_read(dev, RF2XX_CSMA_SEED_1_REG);
+		reg |= (1 << RF2XX_AACK_DIS_ACK);
+		rf2xx_iface_reg_write(dev, RF2XX_CSMA_SEED_1_REG, reg);
+	} else {
+		reg = rf2xx_iface_reg_read(dev, RF2XX_XAH_CTRL_1_REG);
+		reg &= ~(1 << RF2XX_AACK_PROM_MODE);
+		rf2xx_iface_reg_write(dev, RF2XX_XAH_CTRL_1_REG, reg);
+
+		reg = rf2xx_iface_reg_read(dev, RF2XX_CSMA_SEED_1_REG);
+		reg &= ~(1 << RF2XX_AACK_DIS_ACK);
+		rf2xx_iface_reg_write(dev, RF2XX_CSMA_SEED_1_REG, reg);
+	}
+
+	return 0;
+}
+
 int rf2xx_configure(const struct device *dev,
 		    enum ieee802154_config_type type,
 		    const struct ieee802154_config *config)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(type);
-	ARG_UNUSED(config);
+	int ret = -EINVAL;
 
-	return 0;
+	switch (type) {
+	case IEEE802154_CONFIG_AUTO_ACK_FPB:
+	case IEEE802154_CONFIG_ACK_FPB:
+		break;
+
+	case IEEE802154_CONFIG_PAN_COORDINATOR:
+		ret = rf2xx_pan_coord_set(dev, config->pan_coordinator);
+		break;
+
+	case IEEE802154_CONFIG_PROMISCUOUS:
+		ret = rf2xx_promiscuous_set(dev, config->promiscuous);
+		break;
+
+	case IEEE802154_CONFIG_EVENT_HANDLER:
+	default:
+		break;
+	}
+
+	return ret;
 }
 
 static int power_on_and_setup(const struct device *dev)
@@ -680,6 +765,8 @@ static int power_on_and_setup(const struct device *dev)
 		config |= (1 << RF2XX_OQPSK_SCRAM_EN);
 	}
 	rf2xx_iface_reg_write(dev, RF2XX_TRX_CTRL_2_REG, config);
+
+	ctx->tx_mode = IEEE802154_TX_MODE_CSMA_CA;
 
 	/* Configure INT behaviour */
 	config = (1 << RF2XX_RX_START) |
@@ -754,42 +841,12 @@ static inline int configure_gpios(const struct device *dev)
 
 static inline int configure_spi(const struct device *dev)
 {
-	struct rf2xx_context *ctx = dev->data;
 	const struct rf2xx_config *conf = dev->config;
 
-	/* Get SPI Driver Instance*/
-	ctx->spi = device_get_binding(conf->spi.devname);
-	if (!ctx->spi) {
-		LOG_ERR("Failed to get instance of %s device",
-			conf->spi.devname);
-
+	if (!spi_is_ready(&conf->spi)) {
+		LOG_ERR("SPI bus %s is not ready",
+			conf->spi.bus->name);
 		return -ENODEV;
-	}
-
-	/* Apply SPI Config: 8-bit, MSB First, MODE-0 */
-	ctx->spi_cfg.operation = SPI_WORD_SET(8) |
-				 SPI_TRANSFER_MSB;
-	ctx->spi_cfg.slave = conf->spi.addr;
-	ctx->spi_cfg.frequency = conf->spi.freq;
-	ctx->spi_cfg.cs = NULL;
-
-	/*
-	 * Get SPI Chip Select Instance
-	 *
-	 * This is an optinal feature configured on DTS. Some SPI controllers
-	 * automatically set CS line by device slave address. Check your SPI
-	 * device driver to understand if you need this option enabled.
-	 */
-	ctx->spi_cs.gpio_dev = device_get_binding(conf->spi.cs.devname);
-	if (ctx->spi_cs.gpio_dev) {
-		ctx->spi_cs.gpio_pin = conf->spi.cs.pin;
-		ctx->spi_cs.gpio_dt_flags = conf->spi.cs.flags;
-		ctx->spi_cs.delay = 0U;
-
-		ctx->spi_cfg.cs = &ctx->spi_cs;
-
-		LOG_DBG("SPI GPIO CS configured on %s:%u",
-			conf->spi.cs.devname, conf->spi.cs.pin);
 	}
 
 	return 0;
@@ -894,18 +951,6 @@ static struct ieee802154_radio_api rf2xx_radio_api = {
 	UTIL_AND(DT_INST_NODE_HAS_PROP(n, gpio_pha),			\
 		 DT_INST_GPIO_FLAGS(n, gpio_pha))
 
-#define DRV_INST_SPI_DEV_CS_GPIOS_LABEL(n)				\
-	UTIL_AND(DT_INST_SPI_DEV_HAS_CS_GPIOS(n),			\
-		 DT_INST_SPI_DEV_CS_GPIOS_LABEL(n))
-
-#define DRV_INST_SPI_DEV_CS_GPIOS_PIN(n)				\
-	UTIL_AND(DT_INST_SPI_DEV_HAS_CS_GPIOS(n),			\
-		 DT_INST_SPI_DEV_CS_GPIOS_PIN(n))
-
-#define DRV_INST_SPI_DEV_CS_GPIOS_FLAGS(n)				\
-	UTIL_AND(DT_INST_SPI_DEV_HAS_CS_GPIOS(n),			\
-		 DT_INST_SPI_DEV_CS_GPIOS_FLAGS(n))
-
 #define DRV_INST_LOCAL_MAC_ADDRESS(n)					\
 	UTIL_AND(DT_INST_NODE_HAS_PROP(n, local_mac_address),		\
 		 UTIL_AND(DT_INST_PROP_LEN(n, local_mac_address) == 8,	\
@@ -936,15 +981,11 @@ static struct ieee802154_radio_api rf2xx_radio_api = {
 		.clkm.pin = DRV_INST_GPIO_PIN(n, clkm_gpios),		\
 		.clkm.flags = DRV_INST_GPIO_FLAGS(n, clkm_gpios),	\
 									\
-		.spi.devname = DT_INST_BUS_LABEL(n),			\
-		.spi.addr = DT_INST_REG_ADDR(n),			\
-		.spi.freq = DT_INST_PROP(n, spi_max_frequency),		\
-		.spi.cs.devname = DRV_INST_SPI_DEV_CS_GPIOS_LABEL(n),	\
-		.spi.cs.pin = DRV_INST_SPI_DEV_CS_GPIOS_PIN(n),		\
-		.spi.cs.flags = DRV_INST_SPI_DEV_CS_GPIOS_FLAGS(n),	\
+		.spi = SPI_DT_SPEC_INST_GET(n, SPI_WORD_SET(8) |	\
+				 SPI_TRANSFER_MSB, 0),			\
 	}
 
-#define IEEE802154_RF2XX_DEVICE_DATA(n)                                \
+#define IEEE802154_RF2XX_DEVICE_DATA(n)                                 \
 	static struct rf2xx_context rf2xx_ctx_data_##n = {              \
 		.mac_addr = DRV_INST_LOCAL_MAC_ADDRESS(n)               \
 	}
@@ -953,7 +994,7 @@ static struct ieee802154_radio_api rf2xx_radio_api = {
 	DEVICE_DT_INST_DEFINE(			   \
 		n,				   \
 		&rf2xx_init,			   \
-		device_pm_control_nop,		   \
+		NULL,				   \
 		&rf2xx_ctx_data_##n,		   \
 		&rf2xx_ctx_config_##n,		   \
 		POST_KERNEL,			   \
@@ -964,7 +1005,7 @@ static struct ieee802154_radio_api rf2xx_radio_api = {
 	NET_DEVICE_DT_INST_DEFINE(		   \
 		n,				   \
 		&rf2xx_init,			   \
-		device_pm_control_nop,		   \
+		NULL,				   \
 		&rf2xx_ctx_data_##n,		   \
 		&rf2xx_ctx_config_##n,		   \
 		CONFIG_IEEE802154_RF2XX_INIT_PRIO, \

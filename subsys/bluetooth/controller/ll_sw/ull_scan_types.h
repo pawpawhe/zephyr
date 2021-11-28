@@ -5,7 +5,6 @@
  */
 
 struct ll_scan_set {
-	struct evt_hdr  evt;
 	struct ull_hdr  ull;
 	struct lll_scan lll;
 
@@ -27,8 +26,6 @@ struct ll_scan_set {
 
 		uint8_t adv_addr[BDADDR_SIZE];
 
-		struct node_rx_hdr *node_rx_estab;
-
 		/* Non-Null when creating sync, reset in ISR context on
 		 * synchronisation state and checked in Thread context when
 		 * cancelling sync create, hence the volatile keyword.
@@ -39,9 +36,11 @@ struct ll_scan_set {
 };
 
 struct ll_scan_aux_set {
-	struct evt_hdr      evt;
 	struct ull_hdr      ull;
 	struct lll_scan_aux lll;
+
+	/* lll_scan or lll_sync */
+	void *parent;
 
 	struct node_rx_hdr *rx_head;
 	struct node_rx_hdr *rx_last;

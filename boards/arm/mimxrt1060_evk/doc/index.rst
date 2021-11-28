@@ -6,14 +6,14 @@ NXP MIMXRT1060-EVK
 Overview
 ********
 
-The i.MX RT1060 is the latest addition to the industry's first crossover
+The i.MX RT1060 adds to the industry's first crossover
 processor series and expands the i.MX RT series to three scalable families.
 
 The i.MX RT1060 doubles the On-Chip SRAM to 1MB while keeping pin-to-pin
-compatibility with i.MX RT1050. This new series introduces additional features
+compatibility with i.MX RT1050. This series introduces additional features
 ideal for real-time applications such as High-Speed GPIO, CAN-FD, and
 synchronous parallel NAND/NOR/PSRAM controller. The i.MX RT1060 runs on the
-Arm® Cortex-M7® core at 600 MHz.
+Arm® Cortex-M7® core up to 600 MHz.
 
 .. image:: ./mimxrt1060_evk.jpg
    :width: 720px
@@ -96,9 +96,15 @@ features:
 +-----------+------------+-------------------------------------+
 | DISPLAY   | on-chip    | display                             |
 +-----------+------------+-------------------------------------+
+| FLASH     | on-chip    | QSPI flash                          |
++-----------+------------+-------------------------------------+
 | GPIO      | on-chip    | gpio                                |
 +-----------+------------+-------------------------------------+
+| SPI       | on-chip    | spi                                 |
++-----------+------------+-------------------------------------+
 | I2C       | on-chip    | i2c                                 |
++-----------+------------+-------------------------------------+
+| WATCHDOG  | on-chip    | watchdog                            |
 +-----------+------------+-------------------------------------+
 | SDHC      | on-chip    | disk access                         |
 +-----------+------------+-------------------------------------+
@@ -108,6 +114,12 @@ features:
 | ENET      | on-chip    | ethernet                            |
 +-----------+------------+-------------------------------------+
 | USB       | on-chip    | USB device                          |
++-----------+------------+-------------------------------------+
+| CAN       | on-chip    | can                                 |
++-----------+------------+-------------------------------------+
+| DMA       | on-chip    | dma                                 |
++-----------+------------+-------------------------------------+
+| ADC       | on-chip    | adc                                 |
 +-----------+------------+-------------------------------------+
 
 
@@ -124,7 +136,13 @@ The MIMXRT1060 SoC has five pairs of pinmux/gpio controllers.
 +---------------+-----------------+---------------------------+
 | Name          | Function        | Usage                     |
 +===============+=================+===========================+
-| GPIO_AD_B0_02 | LCD_RST         | LCD Display               |
+| GPIO_AD_B0_00 | LPSPI1_SCK      | SPI                       |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B0_01 | LPSPI1_SDO      | SPI                       |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B0_02 | LPSPI3_SDI/LCD_RST| SPI/LCD Display         |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B0_03 | LPSPI3_PCS0     | SPI                       |
 +---------------+-----------------+---------------------------+
 | GPIO_AD_B0_05 | GPIO            | SD Card                   |
 +---------------+-----------------+---------------------------+
@@ -218,18 +236,26 @@ The MIMXRT1060 SoC has five pairs of pinmux/gpio controllers.
 +---------------+-----------------+---------------------------+
 | GPIO_AD_B0_10 | ENET_INT        | Ethernet                  |
 +---------------+-----------------+---------------------------+
-| GPIO_SD_B0_00 | USDHC1_CMD      | SD Card                   |
+| GPIO_SD_B0_00 | USDHC1_CMD/LPSPI1_SCK | SD Card/SPI         |
 +---------------+-----------------+---------------------------+
-| GPIO_SD_B0_01 | USDHC1_CLK      | SD Card                   |
+| GPIO_SD_B0_01 | USDHC1_CLK/LPSPI1_PCS0 | SD Card/SPI        |
 +---------------+-----------------+---------------------------+
-| GPIO_SD_B0_02 | USDHC1_DATA0    | SD Card                   |
+| GPIO_SD_B0_02 | USDHC1_DATA0/LPSPI1_SDO | SD Card/SPI       |
 +---------------+-----------------+---------------------------+
-| GPIO_SD_B0_03 | USDHC1_DATA1    | SD Card                   |
+| GPIO_SD_B0_03 | USDHC1_DATA1/LPSPI1_SDI | SD Card/SPI       |
 +---------------+-----------------+---------------------------+
 | GPIO_SD_B0_04 | USDHC1_DATA2    | SD Card                   |
 +---------------+-----------------+---------------------------+
 | GPIO_SD_B0_05 | USDHC1_DATA3    | SD Card                   |
 +---------------+-----------------+---------------------------+
+| GPIO_AD_B1_11 | ADC             | ADC1 Channel 0            |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B1_10 | ADC             | ADC1 Channel 15           |
++---------------+-----------------+---------------------------+
+
+.. note::
+        In order to use the SPI peripheral on this board, resistors R278, R279,
+        R280 and R281 must be populated with zero ohm resistors.
 
 System Clock
 ============
@@ -259,15 +285,18 @@ however the :ref:`pyocd-debug-host-tools` do not yet support programming the
 external flashes on this board so you must reconfigure the board for one of the
 following debug probes instead.
 
-:ref:`jlink-external-debug-probe`
+.. _Using J-Link RT1060:
+
+Using J-Link
 ---------------------------------
 
 Install the :ref:`jlink-debug-host-tools` and make sure they are in your search
 path.
 
-Attach a J-Link 20-pin connector to J21. Check that jumpers J47 and J48 are
-**off** (they are on by default when boards ship from the factory) to ensure
-SWD signals are disconnected from the OpenSDA microcontroller.
+There are two options: the onboard debug circuit can be updated with Segger
+J-Link firmware, or :ref:`jlink-external-debug-probe` can be attached to the
+EVK. See `Using J-Link with MIMXRT1060-EVK or MIMXRT1064-EVK`_ for more
+details.
 
 Configuring a Console
 =====================
@@ -328,7 +357,7 @@ Troubleshooting
 
 If the debug probe fails to connect with the following error, it's possible
 that the boot header in QSPI flash is invalid or corrupted. The boot header is
-configured by :option:`CONFIG_NXP_IMX_RT_BOOT_HEADER`.
+configured by :kconfig:`CONFIG_NXP_IMX_RT_BOOT_HEADER`.
 
 .. code-block:: console
 
@@ -354,11 +383,15 @@ steps:
 
 #. Reset by pressing SW9
 
+If the west flash or debug commands fail, and the command hangs while executing
+runners.jlink, confirm the J-Link debug probe is configured, powered, and
+connected to the EVK properly. See :ref:`Using J-Link RT1060` for more details.
+
 .. _MIMXRT1060-EVK Website:
    https://www.nxp.com/support/developer-resources/software-development-tools/mcuxpresso-software-and-tools/mimxrt1060-evk-i.mx-rt1060-evaluation-kit:MIMXRT1060-EVK
 
 .. _MIMXRT1060-EVK User Guide:
-   https://www.nxp.com/webapp/Download?colCode=UM11151UG
+   https://www.nxp.com/docs/en/data-sheet/MIMXRT10601064EKBHUG.pdf
 
 .. _MIMXRT1060-EVK Schematics:
    https://www.nxp.com/webapp/Download?colCode=MIMXRT1060-EVK-DESIGN-FILE-A2
@@ -371,3 +404,6 @@ steps:
 
 .. _i.MX RT1060 Reference Manual:
    https://www.nxp.com/webapp/Download?colCode=IMXRT1060RM
+
+.. _Using J-Link with MIMXRT1060-EVK or MIMXRT1064-EVK:
+   https://community.nxp.com/t5/i-MX-RT-Knowledge-Base/Using-J-Link-with-MIMXRT1060-EVK-or-MIMXRT1064-EVK/ta-p/1281149

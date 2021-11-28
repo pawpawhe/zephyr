@@ -353,7 +353,7 @@ static int bmm150_channel_get(const struct device *dev,
 		bmm150_convert(val, drv_data->sample_y);
 		break;
 	case SENSOR_CHAN_MAGN_Z:
-		bmm150_convert(val, drv_data->sample_x);
+		bmm150_convert(val, drv_data->sample_z);
 		break;
 	case SENSOR_CHAN_MAGN_XYZ:
 		bmm150_convert(val, drv_data->sample_x);
@@ -607,6 +607,6 @@ static const struct bmm150_config bmm150_config = {
 
 static struct bmm150_data bmm150_data;
 
-DEVICE_DT_INST_DEFINE(0, bmm150_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, bmm150_init, NULL,
 			&bmm150_data, &bmm150_config, POST_KERNEL,
 			CONFIG_SENSOR_INIT_PRIORITY, &bmm150_api_funcs);

@@ -38,6 +38,13 @@ When the semaphore is given, it is taken by the highest priority thread
 that has waited longest.
 
 .. note::
+    You may initialize a "full" semaphore (count equal to limit) to limit the number
+    of threads able to execute the critical section at the same time. You may also
+    initialize an empty semaphore (count equal to 0, with a limit greater than 0)
+    to create a gate through which no waiting thread may pass until the semaphore
+    is incremented. All standard use cases of the common semaphore are supported.
+
+.. note::
     The kernel does allow an ISR to take a semaphore, however the ISR must
     not attempt to wait if the semaphore is unavailable.
 
@@ -129,7 +136,6 @@ API Reference
 **************
 
 .. doxygengroup:: semaphore_apis
-   :project: Zephyr
 
 User Mode Semaphore API Reference
 *********************************
@@ -139,4 +145,3 @@ thread when user mode enabled. When user mode isn't enabled, sys_sem behaves
 like k_sem.
 
 .. doxygengroup:: user_semaphore_apis
-   :project: Zephyr

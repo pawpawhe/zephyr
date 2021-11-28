@@ -9,6 +9,7 @@
 #include <sys/atomic.h>
 #include <sys/util.h>
 #include <string.h>
+#include <logging/log_msg2.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -465,6 +466,22 @@ static inline struct log_msg *log_msg_create_3(const char *str,
 struct log_msg *log_msg_create_n(const char *str,
 				 log_arg_t *args,
 				 uint32_t nargs);
+
+/**
+ * @brief Get number of free blocks from the log mem pool
+ */
+uint32_t log_msg_mem_get_free(void);
+
+/**
+ * @brief Get number of used blocks from the log mem pool
+ */
+uint32_t log_msg_mem_get_used(void);
+
+/**
+ * @brief Get max used blocks from the log mem pool
+ */
+uint32_t log_msg_mem_get_max_used(void);
+
 
 /**
  * @}

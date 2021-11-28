@@ -15,6 +15,12 @@ config ADC_MCUX_ADC16
 	help
 	  Enable the MCUX ADC16 driver.
 
+config ADC_MCUX_12B1MSPS_SAR
+	bool "MCUX 12B1MSPS SAR ADC driver"
+	depends on HAS_MCUX_12B1MSPS_SAR
+	help
+	  Enable the MCUX 12B1MSPS SAR ADC driver.
+
 config ADC_MCUX_LPADC
 	bool "MCUX LPADC driver"
 	depends on HAS_MCUX_LPADC
@@ -52,6 +58,22 @@ config ADC_MCUX_ADC16_VREF_ALTERNATE
 	bool "Alternate reference pair"
 
 endchoice
+
+config ADC_MCUX_ADC16_ENABLE_EDMA
+	bool "Enable EDMA for adc driver"
+	depends on HAS_MCUX_ADC16 && HAS_MCUX_EDMA
+	help
+	  Enable the MCUX ADC16 driver.
+
+if ADC_MCUX_ADC16_ENABLE_EDMA
+
+config ADC_MCUX_ADC16_HW_TRIGGER
+	bool "ADC HW TRIGGER"
+	default y
+	help
+	  Support HW Trigger ADC
+
+endif # ADC_MCUX_ADC16_ENABLE_EDMA
 
 endif # ADC_MCUX_ADC16
 

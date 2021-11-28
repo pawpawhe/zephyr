@@ -329,9 +329,9 @@ static struct uart_cc32xx_dev_data_t uart_cc32xx_dev_data_##idx = { \
 	IF_ENABLED(CONFIG_UART_INTERRUPT_DRIVEN, (.cb = NULL,)) \
 }; \
 DEVICE_DT_INST_DEFINE(idx, uart_cc32xx_init, \
-	device_pm_control_nop, &uart_cc32xx_dev_data_##idx, \
+	NULL, &uart_cc32xx_dev_data_##idx, \
 	&uart_cc32xx_dev_cfg_##idx, \
-	PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, \
+	PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY, \
 	(void *)&uart_cc32xx_driver_api); \
 
 DT_INST_FOREACH_STATUS_OKAY(UART_32XX_DEVICE);

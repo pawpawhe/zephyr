@@ -30,7 +30,7 @@ Example devicetree fragment below shows how to add SD card node to ``spi1``
 interface. Example uses pin ``PA27`` for chip select, and runs the SPI bus
 at 24 MHz once the SD card has been initialized:
 
-.. code-block:: DTS
+.. code-block:: devicetree
 
     &spi1 {
             status = "okay";
@@ -57,23 +57,21 @@ Disk Access API Configuration Options
 
 Related configuration options:
 
-* :option:`CONFIG_DISK_ACCESS`
+* :kconfig:`CONFIG_DISK_ACCESS`
 
 API Reference
 *************
 
 .. doxygengroup:: disk_access_interface
-   :project: Zephyr
 
 Disk Driver Configuration Options
 *********************************
 
 Related driver configuration options:
 
-* :option:`CONFIG_DISK_DRIVERS`
+* :kconfig:`CONFIG_DISK_DRIVERS`
 
 Disk Driver Interface
 *********************
 
 .. doxygengroup:: disk_driver_interface
-   :project: Zephyr

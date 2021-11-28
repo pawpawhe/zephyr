@@ -26,19 +26,13 @@ LOG_MODULE_REGISTER(adc_mcp320x, CONFIG_ADC_LOG_LEVEL);
 #define MCP320X_RESOLUTION 12U
 
 struct mcp320x_config {
-	const char *spi_dev_name;
-	const char *spi_cs_dev_name;
-	gpio_pin_t spi_cs_pin;
-	gpio_dt_flags_t spi_cs_dt_flags;
-	struct spi_config spi_cfg;
+	struct spi_dt_spec bus;
 	uint8_t channels;
 };
 
 struct mcp320x_data {
 	struct adc_context ctx;
 	const struct device *dev;
-	const struct device *spi_dev;
-	struct spi_cs_control spi_cs;
 	uint16_t *buffer;
 	uint16_t *repeat_buffer;
 	uint8_t channels;
@@ -228,7 +222,7 @@ static int mcp320x_read_channel(const struct device *dev, uint8_t channel,
 		tx_bytes[0] |= BIT(1);
 	}
 
-	err = spi_transceive(data->spi_dev, &config->spi_cfg, &tx, &rx);
+	err = spi_transceive_dt(&config->bus, &tx, &rx);
 	if (err) {
 		return err;
 	}
@@ -280,25 +274,10 @@ static int mcp320x_init(const struct device *dev)
 	data->dev = dev;
 
 	k_sem_init(&data->sem, 0, 1);
-	data->spi_dev = device_get_binding(config->spi_dev_name);
 
-	if (!data->spi_dev) {
-		LOG_ERR("SPI master device '%s' not found",
-			config->spi_dev_name);
-		return -EINVAL;
-	}
-
-	if (config->spi_cs_dev_name) {
-		data->spi_cs.gpio_dev =
-			device_get_binding(config->spi_cs_dev_name);
-		if (!data->spi_cs.gpio_dev) {
-			LOG_ERR("SPI CS GPIO device '%s' not found",
-				config->spi_cs_dev_name);
-			return -EINVAL;
-		}
-
-		data->spi_cs.gpio_pin = config->spi_cs_pin;
-		data->spi_cs.gpio_dt_flags = config->spi_cs_dt_flags;
+	if (!spi_is_ready(&config->bus)) {
+		LOG_ERR("SPI bus is not ready");
+		return -ENODEV;
 	}
 
 	k_thread_create(&data->thread, data->stack,
@@ -330,37 +309,16 @@ static const struct adc_driver_api mcp320x_adc_api = {
 		ADC_CONTEXT_INIT_SYNC(mcp##t##_data_##n, ctx), \
 	}; \
 	static const struct mcp320x_config mcp##t##_config_##n = { \
-		.spi_dev_name = DT_BUS_LABEL(INST_DT_MCP320X(n, t)), \
-		.spi_cs_dev_name = \
-			UTIL_AND( \
-			DT_SPI_DEV_HAS_CS_GPIOS(INST_DT_MCP320X(n, t)), \
-			DT_SPI_DEV_CS_GPIOS_LABEL(INST_DT_MCP320X(n, t)) \
-			), \
-		.spi_cs_pin = \
-			UTIL_AND( \
-			DT_SPI_DEV_HAS_CS_GPIOS(INST_DT_MCP320X(n, t)), \
-			DT_SPI_DEV_CS_GPIOS_PIN(INST_DT_MCP320X(n, t)) \
-			), \
-		.spi_cs_dt_flags = \
-			UTIL_AND( \
-			DT_SPI_DEV_HAS_CS_GPIOS(INST_DT_MCP320X(n, t)), \
-			DT_SPI_DEV_CS_GPIOS_FLAGS(INST_DT_MCP320X(n, t)) \
-			), \
-		.spi_cfg = { \
-			.operation = (SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | \
-				     SPI_WORD_SET(8)), \
-			.frequency = DT_PROP(INST_DT_MCP320X(n, t), \
-					     spi_max_frequency), \
-			.slave = DT_REG_ADDR(INST_DT_MCP320X(n, t)), \
-			.cs = &mcp##t##_data_##n.spi_cs, \
-		}, \
+		.bus = SPI_DT_SPEC_GET(INST_DT_MCP320X(n, t), \
+					 SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | \
+					 SPI_WORD_SET(8), 0), \
 		.channels = ch, \
 	}; \
 	DEVICE_DT_DEFINE(INST_DT_MCP320X(n, t), \
-			 &mcp320x_init, device_pm_control_nop, \
+			 &mcp320x_init, NULL, \
 			 &mcp##t##_data_##n, \
 			 &mcp##t##_config_##n, POST_KERNEL, \
-			 CONFIG_ADC_MCP320X_INIT_PRIORITY, \
+			 CONFIG_ADC_INIT_PRIORITY, \
 			 &mcp320x_adc_api)
 
 /*

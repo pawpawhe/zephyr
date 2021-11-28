@@ -143,7 +143,7 @@ struct bmp388_config {
 	const struct bmp388_io_ops *ops;
 	union {
 #if DT_ANY_INST_ON_BUS_STATUS_OKAY(spi)
-		struct spi_config spi_cfg;
+		struct spi_dt_spec spi_bus;
 #endif
 #if DT_ANY_INST_ON_BUS_STATUS_OKAY(i2c)
 		uint16_t bus_addr;
@@ -162,10 +162,6 @@ struct bmp388_data {
 	uint8_t osr_pressure;
 	uint8_t osr_temp;
 	struct bmp388_cal_data cal;
-
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-	uint32_t device_power_state;
-#endif
 
 #if defined(CONFIG_BMP388_TRIGGER)
 	struct gpio_callback gpio_cb;

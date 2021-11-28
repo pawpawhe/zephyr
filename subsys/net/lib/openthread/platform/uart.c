@@ -19,12 +19,11 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <sys/ring_buffer.h>
 #include <sys/atomic.h>
 
-#ifdef CONFIG_OPENTHREAD_COPROCESSOR_SPINEL_ON_UART_ACM
 #include <usb/usb_device.h>
-#endif
 
+#include <openthread/ncp.h>
 #include <openthread-system.h>
-#include <openthread/platform/uart.h>
+#include <utils/uart.h>
 
 #include "platform-zephyr.h"
 
@@ -118,6 +117,16 @@ static void uart_callback(const struct device *dev, void *user_data)
 	}
 }
 
+void otPlatUartReceived(const uint8_t *aBuf, uint16_t aBufLength)
+{
+	otNcpHdlcReceive(aBuf, aBufLength);
+}
+
+void otPlatUartSendDone(void)
+{
+	otNcpHdlcSendDone();
+}
+
 void platformUartProcess(otInstance *aInstance)
 {
 	uint32_t len = 0;
@@ -148,17 +157,47 @@ void platformUartProcess(otInstance *aInstance)
 
 otError otPlatUartEnable(void)
 {
-	ot_uart.dev = device_get_binding(
-		CONFIG_OPENTHREAD_COPROCESSOR_SPINEL_ON_UART_DEV_NAME);
+	ot_uart.dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_ot_uart));
 
-	if ((&ot_uart)->dev == NULL) {
-		LOG_ERR("UART device not found");
+	if (!device_is_ready(ot_uart.dev)) {
+		LOG_ERR("UART device not ready");
 		return OT_ERROR_FAILED;
 	}
 
 	uart_irq_callback_user_data_set(ot_uart.dev,
 					uart_callback,
 					(void *)&ot_uart);
+
+	if (DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_ot_uart), zephyr_cdc_acm_uart)) {
+		int ret;
+		uint32_t dtr = 0U;
+
+		ret = usb_enable(NULL);
+		if (ret != 0) {
+			LOG_ERR("Failed to enable USB");
+			return OT_ERROR_FAILED;
+		}
+
+		LOG_INF("Waiting for host to be ready to communicate");
+
+		/* Data Terminal Ready - check if host is ready to communicate */
+		while (!dtr) {
+			ret = uart_line_ctrl_get(ot_uart.dev,
+						 UART_LINE_CTRL_DTR, &dtr);
+			if (ret) {
+				LOG_ERR("Failed to get Data Terminal Ready line state: %d",
+					ret);
+				continue;
+			}
+			k_msleep(100);
+		}
+
+		/* Data Carrier Detect Modem - mark connection as established */
+		(void)uart_line_ctrl_set(ot_uart.dev, UART_LINE_CTRL_DCD, 1);
+		/* Data Set Ready - the NCP SoC is ready to communicate */
+		(void)uart_line_ctrl_set(ot_uart.dev, UART_LINE_CTRL_DSR, 1);
+	}
+
 	uart_irq_rx_enable(ot_uart.dev);
 
 	return OT_ERROR_NONE;
@@ -166,13 +205,13 @@ otError otPlatUartEnable(void)
 
 otError otPlatUartDisable(void)
 {
-#ifdef CONFIG_OPENTHREAD_COPROCESSOR_SPINEL_ON_UART_ACM
-	int ret = usb_disable();
+	if (DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_ot_uart), zephyr_cdc_acm_uart)) {
+		int ret = usb_disable();
 
-	if (ret) {
-		LOG_WRN("Failed to disable USB (%d)", ret);
+		if (ret) {
+			LOG_WRN("Failed to disable USB (%d)", ret);
+		}
 	}
-#endif
 
 	uart_irq_tx_disable(ot_uart.dev);
 	uart_irq_rx_disable(ot_uart.dev);

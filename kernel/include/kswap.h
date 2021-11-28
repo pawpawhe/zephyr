@@ -65,9 +65,32 @@ static ALWAYS_INLINE unsigned int do_swap(unsigned int key,
 	ARG_UNUSED(lock);
 	struct k_thread *new_thread, *old_thread;
 
+#ifdef CONFIG_SPIN_VALIDATE
+	/* Make sure the key acts to unmask interrupts, if it doesn't,
+	 * then we are context switching out of a nested lock
+	 * (i.e. breaking the lock of someone up the stack) which is
+	 * forbidden!  The sole exception are dummy threads used
+	 * during initialization (where we start with interrupts
+	 * masked and switch away to begin scheduling) and the case of
+	 * a dead current thread that was just aborted (where the
+	 * damage was already done by the abort anyway).
+	 *
+	 * (Note that this is disabled on ARM64, where system calls
+	 * can sometimes run with interrupts masked in ways that don't
+	 * represent lock state.  See #35307)
+	 */
+# ifndef CONFIG_ARM64
+	__ASSERT(arch_irq_unlocked(key) ||
+		 _current->base.thread_state & (_THREAD_DUMMY | _THREAD_DEAD),
+		 "Context switching while holding lock!");
+# endif
+#endif
+
 	old_thread = _current;
 
 	z_check_stack_sentinel();
+
+	old_thread->swap_retval = -EAGAIN;
 
 	/* We always take the scheduler spinlock if we don't already
 	 * have it.  We "release" other spinlocks here.  But we never
@@ -86,8 +109,7 @@ static ALWAYS_INLINE unsigned int do_swap(unsigned int key,
 #ifdef CONFIG_TIMESLICING
 		z_reset_time_slice();
 #endif
-
-		old_thread->swap_retval = -EAGAIN;
+		z_sched_usage_switch(new_thread);
 
 #ifdef CONFIG_SMP
 		_current_cpu->swap_ok = 0;

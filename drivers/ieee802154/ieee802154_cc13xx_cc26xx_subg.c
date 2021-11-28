@@ -36,6 +36,8 @@ static void ieee802154_cc13xx_cc26xx_subg_data_init(
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data);
 static int ieee802154_cc13xx_cc26xx_subg_stop(
 	const struct device *dev);
+static int ieee802154_cc13xx_cc26xx_subg_stop_if(
+	const struct device *dev);
 static int ieee802154_cc13xx_cc26xx_subg_rx(
 	const struct device *dev);
 static void ieee802154_cc13xx_cc26xx_subg_setup_rx_buffers(
@@ -64,6 +66,12 @@ static uint32_t overrides_sub_ghz[] = {
 	/* Tx: Set PA trim to max to maximize its output power (in ADI0, set PACTL0=0xF8) */
 	ADI_REG_OVERRIDE(0, 12, 0xF8),
 	(uint32_t)0xFFFFFFFF
+};
+
+/** RF patches to use (note: RF core keeps a pointer to this, so no stack). */
+static RF_Mode rf_mode = {
+	.rfMode = RF_MODE_MULTIPLE,
+	.cpePatchFxn = &rf_patch_cpe_multi_protocol,
 };
 
 /* Sub GHz power table */
@@ -493,10 +501,14 @@ static void ieee802154_cc13xx_cc26xx_subg_rx_done(
 
 static int ieee802154_cc13xx_cc26xx_subg_start(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	/* Start RX */
+	(void)ieee802154_cc13xx_cc26xx_subg_rx(dev);
 	return 0;
 }
 
+/**
+ * Flushes / stops all radio commands in RF queue.
+ */
 static int ieee802154_cc13xx_cc26xx_subg_stop(const struct device *dev)
 {
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
@@ -512,6 +524,26 @@ static int ieee802154_cc13xx_cc26xx_subg_stop(const struct device *dev)
 		return -EIO;
 	}
 
+	return 0;
+}
+
+/**
+ * Stops the sub-GHz interface and yields the radio (tells RF module to power
+ * down).
+ */
+static int ieee802154_cc13xx_cc26xx_subg_stop_if(const struct device *dev)
+{
+	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
+		get_dev_data(dev);
+	int ret;
+
+	ret = ieee802154_cc13xx_cc26xx_subg_stop(dev);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* power down radio */
+	RF_yield(drv_data->rf_handle);
 	return 0;
 }
 
@@ -602,7 +634,7 @@ static struct ieee802154_radio_api
 	.set_txpower = ieee802154_cc13xx_cc26xx_subg_set_txpower,
 	.tx = ieee802154_cc13xx_cc26xx_subg_tx,
 	.start = ieee802154_cc13xx_cc26xx_subg_start,
-	.stop = ieee802154_cc13xx_cc26xx_subg_stop,
+	.stop = ieee802154_cc13xx_cc26xx_subg_stop_if,
 	.configure = ieee802154_cc13xx_cc26xx_subg_configure,
 	.get_subg_channel_count =
 		ieee802154_cc13xx_cc26xx_subg_get_subg_channel_count,
@@ -612,10 +644,6 @@ static int ieee802154_cc13xx_cc26xx_subg_init(const struct device *dev)
 {
 	RF_Params rf_params;
 	RF_EventMask reason;
-	RF_Mode rf_mode = {
-		.rfMode = RF_MODE_MULTIPLE,
-		.cpePatchFxn = &rf_patch_cpe_multi_protocol,
-	};
 	struct ieee802154_cc13xx_cc26xx_subg_data *drv_data =
 		get_dev_data(dev);
 
@@ -759,7 +787,7 @@ static struct ieee802154_cc13xx_cc26xx_subg_data
 #if defined(CONFIG_NET_L2_IEEE802154_SUB_GHZ)
 NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx_subg,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DRV_NAME,
-		ieee802154_cc13xx_cc26xx_subg_init, device_pm_control_nop,
+		ieee802154_cc13xx_cc26xx_subg_init, NULL,
 		&ieee802154_cc13xx_cc26xx_subg_data, NULL,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO,
 		&ieee802154_cc13xx_cc26xx_subg_radio_api, IEEE802154_L2,
@@ -768,7 +796,7 @@ NET_DEVICE_INIT(ieee802154_cc13xx_cc26xx_subg,
 DEVICE_DEFINE(ieee802154_cc13xx_cc26xx_subg,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_DRV_NAME,
 		ieee802154_cc13xx_cc26xx_subg_init,
-		device_pm_control_nop,
+		NULL,
 		&ieee802154_cc13xx_cc26xx_subg_data, NULL, POST_KERNEL,
 		CONFIG_IEEE802154_CC13XX_CC26XX_SUB_GHZ_INIT_PRIO,
 		&ieee802154_cc13xx_cc26xx_subg_radio_api);

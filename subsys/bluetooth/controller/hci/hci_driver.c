@@ -43,13 +43,16 @@
 
 #include "ll_sw/pdu.h"
 #include "ll_sw/lll.h"
+#include "lll/lll_df_types.h"
+#include "ll_sw/lll_conn.h"
 #include "ll.h"
 
 #include "isoal.h"
 #include "lll_conn_iso.h"
-#include "ull_conn_iso_internal.h"
 #include "ull_conn_iso_types.h"
 #include "ull_iso_types.h"
+#include "ull_conn_internal.h"
+#include "ull_conn_iso_internal.h"
 
 #include "hci_internal.h"
 
@@ -71,8 +74,7 @@ static sys_slist_t hbuf_pend;
 static int32_t hbuf_count;
 #endif
 
-#if defined(CONFIG_BT_CTLR_ADV_ISO) || defined(CONFIG_BT_CTLR_SYNC_ISO) || \
-	defined(CONFIG_BT_CTLR_PERIPHERAL_ISO) || defined(CONFIG_BT_CTLR_CENTRAL_ISO)
+#if defined(CONFIG_BT_CTLR_ISO)
 
 #define SDU_HCI_HDR_SIZE (BT_HCI_ISO_HDR_SIZE + BT_HCI_ISO_TS_DATA_HDR_SIZE)
 
@@ -102,24 +104,32 @@ isoal_status_t sink_sdu_alloc_hci(const struct isoal_sink    *sink_ctx,
 isoal_status_t sink_sdu_emit_hci(const struct isoal_sink         *sink_ctx,
 				 const struct isoal_sdu_produced *valid_sdu)
 {
-	struct ll_conn_iso_stream *cis;
-	uint16_t handle;
-	uint16_t handle_packed;
-	uint8_t  ts, pb;
-	uint16_t len;
+	struct bt_hci_iso_ts_data_hdr *data_hdr;
 	uint16_t packet_status_flag;
 	uint16_t slen, slen_packed;
 	struct bt_hci_iso_hdr *hdr;
-	struct bt_hci_iso_ts_data_hdr *data_hdr;
+	uint16_t handle_packed;
+	struct net_buf *buf;
+	uint16_t handle;
+	uint8_t  ts, pb;
+	uint16_t len;
 
-	struct net_buf *buf = (struct net_buf *) valid_sdu->contents.dbuf;
+	buf = (struct net_buf *) valid_sdu->contents.dbuf;
+
 
 	if (buf) {
+#if defined(CONFIG_BT_CTLR_CONN_ISO_HCI_DATAPATH_SKIP_INVALID_DATA)
+		if (valid_sdu->status != ISOAL_SDU_STATUS_VALID) {
+			/* unref buffer if invalid fragment */
+			net_buf_unref(buf);
+
+			return ISOAL_STATUS_OK;
+		}
+#endif /* CONFIG_BT_CTLR_CONN_ISO_HCI_DATAPATH_SKIP_INVALID_DATA */
 		data_hdr = net_buf_push(buf, BT_HCI_ISO_TS_DATA_HDR_SIZE);
 		hdr = net_buf_push(buf, BT_HCI_ISO_HDR_SIZE);
 
-		cis = sink_ctx->session.cis;
-		handle = ll_conn_iso_stream_handle_get(cis);
+		handle = sink_ctx->session.handle;
 
 		pb = sink_ctx->sdu_production.sdu_state;
 
@@ -296,10 +306,9 @@ static inline struct net_buf *encode_node(struct node_rx_pdu *node_rx,
 		hci_acl_encode(node_rx, buf);
 		break;
 #endif
-#if defined(CONFIG_BT_CTLR_ADV_ISO) || defined(CONFIG_BT_CTLR_SYNC_ISO) || \
-	defined(CONFIG_BT_CTLR_PERIPHERAL_ISO) || defined(CONFIG_BT_CTLR_CENTRAL_ISO)
+#if defined(CONFIG_BT_CTLR_ISO)
 	case HCI_CLASS_ISO_DATA: {
-#if defined(CONFIG_BT_CTLR_PERIPHERAL_ISO) || defined(CONFIG_BT_CTLR_CENTRAL_ISO)
+#if defined(CONFIG_BT_CTLR_CONN_ISO)
 		struct ll_conn_iso_stream *cis =
 			ll_conn_iso_stream_get(node_rx->hdr.handle);
 		struct ll_iso_datapath *dp = cis->datapath_out;
@@ -515,16 +524,27 @@ static void recv_thread(void *p1, void *p2, void *p3)
 			buf = process_node(node_rx);
 		}
 
-		if (buf) {
-			if (buf->len) {
+		while (buf) {
+			struct net_buf *frag;
+
+			/* Increment ref count, which will be
+			 * unref on call to net_buf_frag_del
+			 */
+			frag = net_buf_ref(buf);
+			buf = net_buf_frag_del(NULL, buf);
+
+			if (frag->len) {
 				BT_DBG("Packet in: type:%u len:%u",
-					bt_buf_get_type(buf), buf->len);
-				bt_recv(buf);
+					bt_buf_get_type(frag),
+					frag->len);
+
+				bt_recv(frag);
 			} else {
-				net_buf_unref(buf);
+				net_buf_unref(frag);
 			}
+
+			k_yield();
 		}
-		k_yield();
 	}
 }
 

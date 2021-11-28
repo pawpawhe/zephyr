@@ -80,7 +80,13 @@ void test_ram_perms(void)
 
 	pentry_t entry, flags, expected;
 
-	for (pos = Z_KERNEL_VIRT_START; pos < Z_KERNEL_VIRT_END;
+#ifdef CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT
+	const uint8_t *mem_range_end = Z_KERNEL_VIRT_END;
+#else
+	const uint8_t *mem_range_end = (uint8_t *)lnkr_pinned_end;
+#endif /* CONFIG_LINKER_GENERIC_SECTIONS_PRESENT_AT_BOOT */
+
+	for (pos = Z_KERNEL_VIRT_START; pos < mem_range_end;
 	     pos += CONFIG_MMU_PAGE_SIZE) {
 		if (pos == NULL) {
 			/* We have another test specifically for NULL page */
@@ -91,9 +97,9 @@ void test_ram_perms(void)
 
 		if (!IS_ENABLED(CONFIG_SRAM_REGION_PERMISSIONS)) {
 			expected = MMU_P | MMU_RW;
-		} else if (IN_REGION(_image_text, pos)) {
+		} else if (IN_REGION(__text_region, pos)) {
 			expected = MMU_P | MMU_US;
-		} else if (IN_REGION(_image_rodata, pos)) {
+		} else if (IN_REGION(__rodata_region, pos)) {
 			expected = MMU_P | MMU_US | MMU_XD;
 #ifdef CONFIG_COVERAGE_GCOV
 		} else if (IN_REGION(__gcov_bss, pos)) {
@@ -116,6 +122,18 @@ void test_ram_perms(void)
 			 */
 			expected = MMU_P | MMU_US | MMU_RW | MMU_XD;
 #endif /* CONFIG_X86_KPTI */
+#ifdef CONFIG_LINKER_USE_BOOT_SECTION
+		} else if (IN_REGION(lnkr_boot_text, pos)) {
+			expected = MMU_P | MMU_US;
+		} else if (IN_REGION(lnkr_boot_rodata, pos)) {
+			expected = MMU_P | MMU_US | MMU_XD;
+#endif
+#ifdef CONFIG_LINKER_USE_PINNED_SECTION
+		} else if (IN_REGION(lnkr_pinned_text, pos)) {
+			expected = MMU_P | MMU_US;
+		} else if (IN_REGION(lnkr_pinned_rodata, pos)) {
+			expected = MMU_P | MMU_US | MMU_XD;
+#endif
 		} else {
 			/* We forced CONFIG_HW_STACK_PROTECTION off otherwise
 			 * guard pages will have RW cleared. We can relax this

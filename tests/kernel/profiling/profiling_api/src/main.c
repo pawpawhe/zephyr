@@ -5,7 +5,7 @@
  */
 
 #include <ztest.h>
-#include <power/power.h>
+#include <pm/pm.h>
 #include <irq_offload.h>
 #include <debug/stack.h>
 
@@ -22,26 +22,12 @@ static void tdata_dump_callback(const struct k_thread *thread, void *user_data)
 	log_stack_usage(thread);
 }
 
-/*
- * Weak power hook functions. Used on systems that have not implemented
- * power management.
- */
-__weak void pm_power_state_set(struct pm_state_info info)
-{
-	/* Never called. */
-	__ASSERT_NO_MSG(false);
-}
-
-__weak void pm_power_state_exit_post_ops(struct pm_state_info info)
-{
-	/* Never called. */
-	__ASSERT_NO_MSG(false);
-}
-
 /* Our PM policy handler */
-struct pm_state_info pm_policy_next_state(int32_t ticks)
+struct pm_state_info pm_policy_next_state(uint8_t cpu, int32_t ticks)
 {
 	static bool test_flag;
+
+	ARG_UNUSED(cpu);
 
 	/* Call k_thread_foreach only once otherwise it will
 	 * flood the console with stack dumps.

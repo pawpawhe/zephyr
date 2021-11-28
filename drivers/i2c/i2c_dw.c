@@ -425,15 +425,15 @@ static int i2c_dw_transfer(const struct device *dev,
 	 * While waiting at device_sync_sem, kernel can switch to idle
 	 * task which in turn can call pm_system_suspend() hook of Power
 	 * Management App (PMA).
-	 * device_busy_set() call here, would indicate to PMA that it should not
-	 * execute PM policies that would turn off this ip block, causing an
+	 * pm_device_busy_set() call here, would indicate to PMA that it should
+	 * not execute PM policies that would turn off this ip block, causing an
 	 * ongoing hw transaction to be left in an inconsistent state.
 	 * Note : This is just a sample to show a possible use of the API, it is
 	 * upto the driver expert to see, if he actually needs it here, or
 	 * somewhere else, or not needed as the driver's suspend()/resume()
 	 * can handle everything
 	 */
-	device_busy_set(dev);
+	pm_device_busy_set(dev);
 
 		/* Process all the messages */
 	while (msg_left > 0) {
@@ -493,7 +493,7 @@ static int i2c_dw_transfer(const struct device *dev,
 		msg_left--;
 	}
 
-	device_busy_clear(dev);
+	pm_device_busy_clear(dev);
 
 	dw->state = I2C_DW_STATE_READY;
 
@@ -623,7 +623,7 @@ static int i2c_dw_initialize(const struct device *dev)
 			return -EINVAL;
 		}
 
-		pcie_get_mbar(rom->pcie_bdf, 0, &mbar);
+		pcie_probe_mbar(rom->pcie_bdf, 0, &mbar);
 		pcie_set_cmd(rom->pcie_bdf, PCIE_CONF_CMDSTAT_MEM, true);
 
 		device_map(DEVICE_MMIO_RAM_PTR(dev), mbar.phys_addr,
@@ -671,8 +671,66 @@ static int i2c_dw_initialize(const struct device *dev)
 	return 0;
 }
 
-/* The instance-specific header files are chained together (each instance
- * includes the next one, unless it's the last instance) so we only need to
- * include the first instance.
- */
-#include <i2c_dw_port_0.h>
+#define I2C_DW_INIT_PCIE0(n)
+#define I2C_DW_INIT_PCIE1(n)                                                  \
+		.pcie = true,                                                 \
+		.pcie_bdf = DT_INST_REG_ADDR(n),                              \
+		.pcie_id = DT_INST_REG_SIZE(n),
+#define I2C_DW_INIT_PCIE(n) \
+	_CONCAT(I2C_DW_INIT_PCIE, DT_INST_ON_BUS(n, pcie))(n)
+
+#define I2C_DW_IRQ_FLAGS_SENSE0(n) 0
+#define I2C_DW_IRQ_FLAGS_SENSE1(n) DT_INST_IRQ(n, sense)
+#define I2C_DW_IRQ_FLAGS(n) \
+	_CONCAT(I2C_DW_IRQ_FLAGS_SENSE, DT_INST_IRQ_HAS_CELL(n, sense))(n)
+
+/* not PCI(e) */
+#define I2C_DW_IRQ_CONFIG_PCIE0(n)                                            \
+	static void i2c_config_##n(const struct device *port)                 \
+	{                                                                     \
+		ARG_UNUSED(port);                                             \
+		IRQ_CONNECT(DT_INST_IRQN(n), DT_INST_IRQ(n, priority),        \
+			    i2c_dw_isr, DEVICE_DT_INST_GET(n),                \
+			    I2C_DW_IRQ_FLAGS(n));                             \
+		irq_enable(DT_INST_IRQN(n));                                  \
+	}
+
+/* PCI(e) with auto IRQ detection */
+#define I2C_DW_IRQ_CONFIG_PCIE1(n)                                            \
+	static void i2c_config_##n(const struct device *port)                 \
+	{                                                                     \
+		ARG_UNUSED(port);                                             \
+		BUILD_ASSERT(DT_INST_IRQN(n) == PCIE_IRQ_DETECT,              \
+			     "Only runtime IRQ configuration is supported");  \
+		BUILD_ASSERT(IS_ENABLED(CONFIG_DYNAMIC_INTERRUPTS),           \
+			     "DW I2C PCI needs CONFIG_DYNAMIC_INTERRUPTS");   \
+		unsigned int irq = pcie_alloc_irq(DT_INST_REG_ADDR(n));       \
+		if (irq == PCIE_CONF_INTR_IRQ_NONE) {                         \
+			return;                                               \
+		}                                                             \
+		irq_connect_dynamic(irq, DT_INST_IRQ(n, priority),            \
+				    (void (*)(const void *))i2c_dw_isr,       \
+				    DEVICE_DT_INST_GET(n),                    \
+				    I2C_DW_IRQ_FLAGS(n));                     \
+		pcie_irq_enable(DT_INST_REG_ADDR(n), irq);                    \
+	}
+
+#define I2C_DW_IRQ_CONFIG(n) \
+	_CONCAT(I2C_DW_IRQ_CONFIG_PCIE, DT_INST_ON_BUS(n, pcie))(n)
+
+#define I2C_DEVICE_INIT_DW(n)                                                 \
+	static void i2c_config_##n(const struct device *port);                \
+	static const struct i2c_dw_rom_config i2c_config_dw_##n = {           \
+		DEVICE_MMIO_ROM_INIT(DT_DRV_INST(n)),                         \
+		.config_func = i2c_config_##n,                                \
+		.bitrate = DT_INST_PROP(n, clock_frequency),                  \
+		I2C_DW_INIT_PCIE(n)                                           \
+	};                                                                    \
+	static struct i2c_dw_dev_config i2c_##n##_runtime;                    \
+	DEVICE_DT_INST_DEFINE(n, &i2c_dw_initialize, NULL,                    \
+			      &i2c_##n##_runtime, &i2c_config_dw_##n,         \
+			      POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,          \
+			      &funcs);                                        \
+	I2C_DW_IRQ_CONFIG(n)
+
+DT_INST_FOREACH_STATUS_OKAY(I2C_DEVICE_INIT_DW)

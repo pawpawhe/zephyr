@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2020 ITE Corporation. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -292,12 +292,15 @@
 #define SEMBARH			ECREG(EC_REG_BASE_ADDR + 0x109E)
 #define SCRATH_SRAM		0x08
 
+/* --- General Control (GCTRL) --- */
+#define IT8XXX2_GCTRL_BASE      0x00F02000
+#define IT8XXX2_GCTRL_EIDSR     ECREG(IT8XXX2_GCTRL_BASE + 0x31)
+
 /**
  *
  * (11xxh) Interrupt controller (INTC)
  *
  */
-#define MAX_ISR_REG_NUM	24
 #define ISR0			ECREG(EC_REG_BASE_ADDR + 0x3F00)
 #define ISR1			ECREG(EC_REG_BASE_ADDR + 0x3F01)
 #define ISR2			ECREG(EC_REG_BASE_ADDR + 0x3F02)
@@ -319,6 +322,9 @@
 #define ISR18			ECREG(EC_REG_BASE_ADDR + 0x3F4C)
 #define ISR19			ECREG(EC_REG_BASE_ADDR + 0x3F50)
 #define ISR20			ECREG(EC_REG_BASE_ADDR + 0x3F54)
+#define ISR21			ECREG(EC_REG_BASE_ADDR + 0x3F58)
+#define ISR22			ECREG(EC_REG_BASE_ADDR + 0x3F5C)
+#define ISR23			ECREG(EC_REG_BASE_ADDR + 0x3F90)
 
 #define IER0			ECREG(EC_REG_BASE_ADDR + 0x3F04)
 #define IER1			ECREG(EC_REG_BASE_ADDR + 0x3F05)
@@ -341,6 +347,9 @@
 #define IER18			ECREG(EC_REG_BASE_ADDR + 0x3F4D)
 #define IER19			ECREG(EC_REG_BASE_ADDR + 0x3F51)
 #define IER20			ECREG(EC_REG_BASE_ADDR + 0x3F55)
+#define IER21			ECREG(EC_REG_BASE_ADDR + 0x3F59)
+#define IER22			ECREG(EC_REG_BASE_ADDR + 0x3F5D)
+#define IER23			ECREG(EC_REG_BASE_ADDR + 0x3F91)
 
 #define IELMR0			ECREG(EC_REG_BASE_ADDR + 0x3F08)
 #define IELMR1			ECREG(EC_REG_BASE_ADDR + 0x3F09)
@@ -363,6 +372,9 @@
 #define IELMR18			ECREG(EC_REG_BASE_ADDR + 0x3F4E)
 #define IELMR19			ECREG(EC_REG_BASE_ADDR + 0x3F52)
 #define IELMR20			ECREG(EC_REG_BASE_ADDR + 0x3F56)
+#define IELMR21			ECREG(EC_REG_BASE_ADDR + 0x3F5A)
+#define IELMR22			ECREG(EC_REG_BASE_ADDR + 0x3F5E)
+#define IELMR23			ECREG(EC_REG_BASE_ADDR + 0x3F92)
 
 #define IPOLR0			ECREG(EC_REG_BASE_ADDR + 0x3F0C)
 #define IPOLR1			ECREG(EC_REG_BASE_ADDR + 0x3F0D)
@@ -385,281 +397,11 @@
 #define IPOLR18			ECREG(EC_REG_BASE_ADDR + 0x3F4F)
 #define IPOLR19			ECREG(EC_REG_BASE_ADDR + 0x3F53)
 #define IPOLR20			ECREG(EC_REG_BASE_ADDR + 0x3F57)
+#define IPOLR21			ECREG(EC_REG_BASE_ADDR + 0x3F5B)
+#define IPOLR22			ECREG(EC_REG_BASE_ADDR + 0x3F5F)
+#define IPOLR23			ECREG(EC_REG_BASE_ADDR + 0x3F93)
 
-#define IVECT0			ECREG(EC_REG_BASE_ADDR + 0x3F80)
-#define IVECT1			ECREG(EC_REG_BASE_ADDR + 0x3F81)
-#define IVECT2			ECREG(EC_REG_BASE_ADDR + 0x3F82)
-#define IVECT3			ECREG(EC_REG_BASE_ADDR + 0x3F83)
-#define IVECT4			ECREG(EC_REG_BASE_ADDR + 0x3F84)
-#define IVECT5			ECREG(EC_REG_BASE_ADDR + 0x3F85)
-#define IVECT6			ECREG(EC_REG_BASE_ADDR + 0x3F86)
-#define IVECT7			ECREG(EC_REG_BASE_ADDR + 0x3F87)
-#define IVECT8			ECREG(EC_REG_BASE_ADDR + 0x3F88)
-#define IVECT9			ECREG(EC_REG_BASE_ADDR + 0x3F89)
-#define IVECT10			ECREG(EC_REG_BASE_ADDR + 0x3F8A)
-#define IVECT11			ECREG(EC_REG_BASE_ADDR + 0x3F8B)
-#define IVECT12			ECREG(EC_REG_BASE_ADDR + 0x3F8C)
-#define IVECT13			ECREG(EC_REG_BASE_ADDR + 0x3F8D)
-#define IVECT14			ECREG(EC_REG_BASE_ADDR + 0x3F8E)
-#define IVECT15			ECREG(EC_REG_BASE_ADDR + 0x3F8F)
 #define IVECT			ECREG(EC_REG_BASE_ADDR + 0x3F10)
-#define INT0ST			ECREG(EC_REG_BASE_ADDR + 0x3F11)
-#define PFAILR			ECREG(EC_REG_BASE_ADDR + 0x3F12)
-#define IGER0			ECREG(EC_REG_BASE_ADDR + 0x3F60)
-#define IGER1			ECREG(EC_REG_BASE_ADDR + 0x3F61)
-#define IGER2			ECREG(EC_REG_BASE_ADDR + 0x3F62)
-#define IGER3			ECREG(EC_REG_BASE_ADDR + 0x3F63)
-#define IGER4			ECREG(EC_REG_BASE_ADDR + 0x3F64)
-#define IGER5			ECREG(EC_REG_BASE_ADDR + 0x3F65)
-#define IGER6			ECREG(EC_REG_BASE_ADDR + 0x3F66)
-#define IGER7			ECREG(EC_REG_BASE_ADDR + 0x3F67)
-#define IGER8			ECREG(EC_REG_BASE_ADDR + 0x3F68)
-#define IGER9			ECREG(EC_REG_BASE_ADDR + 0x3F69)
-#define IGER10			ECREG(EC_REG_BASE_ADDR + 0x3F6A)
-#define IGER11			ECREG(EC_REG_BASE_ADDR + 0x3F6B)
-#define IGER12			ECREG(EC_REG_BASE_ADDR + 0x3F6C)
-#define IGER13			ECREG(EC_REG_BASE_ADDR + 0x3F6D)
-#define IGER14			ECREG(EC_REG_BASE_ADDR + 0x3F6E)
-#define IGER15			ECREG(EC_REG_BASE_ADDR + 0x3F6F)
-#define IGER16			ECREG(EC_REG_BASE_ADDR + 0x3F70)
-#define IGER17			ECREG(EC_REG_BASE_ADDR + 0x3F71)
-#define IGER18			ECREG(EC_REG_BASE_ADDR + 0x3F72)
-#define IGER19			ECREG(EC_REG_BASE_ADDR + 0x3F73)
-#define IGER20			ECREG(EC_REG_BASE_ADDR + 0x3F74)
-
-/* IER0 */
-#define INT_WKO20		BIT(1)
-#define INT_KBCOBFE		BIT(2)
-#define INT_PMCOBFE		BIT(3)
-#define INT_SMBUS3		BIT(4)
-#define INT_WKINTAD		BIT(5)
-#define INT_WKO23		BIT(6)
-#define INT_PWM			BIT(7)
-
-/* IER1 */
-#define INT_ADC			BIT(0)
-#define INT_SMBUS0		BIT(1)
-#define INT_SMBUS1		BIT(2)
-#define INT_KB			BIT(3)
-#define INT_WKO26		BIT(4)
-#define INT_WKINTC		BIT(5)
-#define INT_WKO25		BIT(6)
-#define INT_CIR			BIT(7)
-
-/* IER2 */
-#define INT_SMBUS2		BIT(0)
-#define INT_WKO24		BIT(1)
-#define INT_PS2_2		BIT(2)
-#define INT_PS2_1		BIT(3)
-#define INT_PS2_0		BIT(4)
-#define INT_WKO22		BIT(5)
-#define SMFIS			BIT(6)
-
-/* IER3 */
-#define INT_KBCIBF		BIT(0)
-#define INT_PMCIBF		BIT(1)
-#define INT_PMC2OBE		BIT(2)
-#define INT_PMC2IBF		BIT(3)
-#define INT_GINT		BIT(4)
-#define INT_EGPC		BIT(5)
-#define INT_EXTIMER		BIT(6)
-#define INT_WKO21		BIT(7)
-
-/* IER4 */
-#define INT_GPINT0		BIT(0)
-#define INT_GPINT1		BIT(1)
-#define INT_GPINT2		BIT(2)
-#define INT_GPINT3		BIT(3)
-#define INT_CIRGPINT		BIT(4)
-#define INT_SSPI		BIT(5)
-#define INT_UART1		BIT(6)
-#define INT_UART2		BIT(7)
-
-/* IER6 */
-#define INT_WKO60		BIT(0)
-#define INT_WKO61		BIT(1)
-#define INT_WKO62		BIT(2)
-#define INT_WKO63		BIT(3)
-#define INT_WKO64		BIT(4)
-#define INT_WKO65		BIT(5)
-#define INT_WKO66		BIT(6)
-#define INT_WKO67		BIT(7)
-
-/* IER7 */
-#define INT_RTCTALARM1		BIT(0)
-#define INT_RTCTALARM2		BIT(1)
-#define INT_ET2INTR		BIT(2)
-#define INT_TMRINTA0		BIT(4)
-#define INT_TMRINTA1		BIT(5)
-#define INT_TMRINTB0		BIT(6)
-#define INT_TMRINTB1		BIT(7)
-
-/* IER8 */
-#define INT_PMC2EXOBE		BIT(0)
-#define INT_PMC2EXIBF		BIT(1)
-#define INT_PMC3OBE		BIT(2)
-#define INT_PMC3IBF		BIT(3)
-#define INT_PMC4OBE		BIT(4)
-#define INT_PMC4IBF		BIT(5)
-#define INT_I2BRAM		BIT(7)
-
-/* IER9 */
-#define INT_WKO70		BIT(0)
-#define INT_WKO71		BIT(1)
-#define INT_WKO72		BIT(2)
-#define INT_WKO73		BIT(3)
-#define INT_WKO74		BIT(4)
-#define INT_WKO75		BIT(5)
-#define INT_WKO76		BIT(6)
-#define INT_WKO77		BIT(7)
-
-/* IER10 */
-#define INT_ET8INTR		BIT(0)
-#define INT_SMBUSCHINER		BIT(1)
-#define INT_CEC			BIT(2)
-#define INT_H2RAMLPC		BIT(3)
-#define INT_KBSDVINTR		BIT(4)
-#define INT_WKO88		BIT(5)
-#define INT_WKO89		BIT(6)
-#define INT_WKO90		BIT(7)
-
-/* IER11 */
-#define INT_WKO80		BIT(0)
-#define INT_WKO81		BIT(1)
-#define INT_WKO82		BIT(2)
-#define INT_WKO83		BIT(3)
-#define INT_WKO84		BIT(4)
-#define INT_WKO85		BIT(5)
-#define INT_WKO86		BIT(6)
-#define INT_WKO87		BIT(7)
-
-/* IER12 */
-#define INT_WKO91		BIT(0)
-#define INT_WKO92		BIT(1)
-#define INT_WKO93		BIT(2)
-#define INT_WKO94		BIT(3)
-#define INT_WKO95		BIT(4)
-#define INT_WKO96		BIT(5)
-#define INT_WKO97		BIT(6)
-#define INT_WKO98		BIT(7)
-
-/* IER13 */
-#define INT_WKO99		BIT(0)
-#define INT_WKO100		BIT(1)
-#define INT_WKO101		BIT(2)
-#define INT_WKO102		BIT(3)
-#define INT_WKO103		BIT(4)
-#define INT_WKO104		BIT(5)
-#define INT_WKO105		BIT(6)
-#define INT_WKO106		BIT(7)
-
-/* IER14 */
-#define INT_WKO107		BIT(0)
-#define INT_WKO108		BIT(1)
-#define INT_WKO109		BIT(2)
-#define INT_WKO110		BIT(3)
-#define INT_WKO111		BIT(4)
-#define INT_WKO112		BIT(5)
-#define INT_WKO113		BIT(6)
-#define INT_WKO114		BIT(7)
-
-/* IER15 */
-#define INT_WKO115		BIT(0)
-#define INT_WKO116		BIT(1)
-#define INT_WKO117		BIT(2)
-#define INT_WKO118		BIT(3)
-#define INT_WKO119		BIT(4)
-#define INT_WKO120		BIT(5)
-#define INT_WKO121		BIT(6)
-#define INT_WKO122		BIT(7)
-
-/* IER16 */
-#define INT_WKO128		BIT(0)
-#define INT_WKO129		BIT(1)
-#define INT_WKO130		BIT(2)
-#define INT_WKO131		BIT(3)
-#define INT_WKO132		BIT(4)
-#define INT_WKO133		BIT(5)
-#define INT_WKO134		BIT(6)
-
-/* IER18 */
-#define INT_PMC5OBE		BIT(5)
-#define INT_PMC5IBE		BIT(6)
-#define INT_VCI			BIT(7)
-
-/* IER19 */
-#define INT_SMBUSE		BIT(0)
-#define INT_SMBUSF		BIT(1)
-#define INT_OSCDMAINTER		BIT(2)
-#define INT_ET3INTR		BIT(3)
-#define INT_ET4INTR		BIT(4)
-#define INT_ET5INTR		BIT(5)
-#define INT_ET6INTR		BIT(6)
-#define INT_ET7INTR		BIT(7)
-
-/**
- *
- * (12xxh) EC Access to ost Controlled Modules (EC2I Bridge)
- *
- */
-#define IHIOA			ECREG(EC_REG_BASE_ADDR + 0x1200)
-#define IHD			ECREG(EC_REG_BASE_ADDR + 0x1201)
-#define LSIOHA			ECREG(EC_REG_BASE_ADDR + 0x1202)
-#define SIOLV			ECREG(EC_REG_BASE_ADDR + 0x1203)
-#define IBMAE			ECREG(EC_REG_BASE_ADDR + 0x1204)
-#define IBCTL			ECREG(EC_REG_BASE_ADDR + 0x1205)
-
-/* Lock Super I/O Host Access Register */
-#define LKCFG			BIT(0)
-
-/* Super I/O Access Lock Violation Register */
-#define CFGLV			BIT(0)
-
-/* EC to I-Bus Modules Access Enable Register */
-#define SWUCAE			BIT(2)
-#define CFGAE			BIT(0)
-
-/* I-Bus Control Register */
-#define CWIB			BIT(2)
-#define CRIB			BIT(1)
-#define CSAE			BIT(0)
-
-/**
- *
- * (13xxh) Keyboard Controller (KBC)
- *
- */
-#define KBHICR			ECREG(EC_REG_BASE_ADDR + 0x1300)
-#define KBIRQR			ECREG(EC_REG_BASE_ADDR + 0x1302)
-#define KBHISR			ECREG(EC_REG_BASE_ADDR + 0x1304)
-#define KBHIKDOR		ECREG(EC_REG_BASE_ADDR + 0x1306)
-#define KBHIMDOR		ECREG(EC_REG_BASE_ADDR + 0x1308)
-#define KBHIDIR			ECREG(EC_REG_BASE_ADDR + 0x130A)
-
-/* KBC Host Interface Control Register*/
-#define PM1ICIE			BIT(6)
-#define PM1OCIE			BIT(5)
-#define PM1HIE			BIT(4)
-#define IBFCIE			BIT(3)
-#define OBECIE			BIT(2)
-#define OBFMIE			BIT(1)
-#define OBFKIE			BIT(0)
-
-/* KBC Interrupt Control Register */
-#define IRQNP			BIT(6)
-#define IRQ11B			BIT(2)
-#define IRQ12B			BIT(1)
-#define IRQ1B			BIT(0)
-
-/* KBC Host Interface Keyboard/Mouse Status Register */
-#define PARE			BIT(7)
-#define GTIM			BIT(6)
-#define AOBF			BIT(5)
-#define KEYL			BIT(4)
-#define C_D			BIT(3)
-#define SYSF			BIT(2)
-#define IBF			BIT(1)
-#define OBF			BIT(0)
 
 /**
  *
@@ -720,100 +462,6 @@
 
 /**
  *
- * (15xxh) Power Management Channel (PMC)
- *
- */
-/* PM1 */
-#define PM1STS			ECREG(EC_REG_BASE_ADDR + 0x1500)
-#define PM1DO			ECREG(EC_REG_BASE_ADDR + 0x1501)
-#define PM1DOSCI		ECREG(EC_REG_BASE_ADDR + 0x1502)
-#define PM1DOSMI		ECREG(EC_REG_BASE_ADDR + 0x1503)
-#define PM1DI			ECREG(EC_REG_BASE_ADDR + 0x1504)
-#define PM1DISCI		ECREG(EC_REG_BASE_ADDR + 0x1505)
-#define PM1CTL			ECREG(EC_REG_BASE_ADDR + 0x1506)
-#define PM1IC			ECREG(EC_REG_BASE_ADDR + 0x1507)
-#define PM1IE			ECREG(EC_REG_BASE_ADDR + 0x1508)
-/* PM2 */
-#define PM2STS			ECREG(EC_REG_BASE_ADDR + 0x1510)
-#define PM2DO			ECREG(EC_REG_BASE_ADDR + 0x1511)
-#define PM2DOSCI		ECREG(EC_REG_BASE_ADDR + 0x1512)
-#define PM2DOSMI		ECREG(EC_REG_BASE_ADDR + 0x1513)
-#define PM2DI			ECREG(EC_REG_BASE_ADDR + 0x1514)
-#define PM2DISCI		ECREG(EC_REG_BASE_ADDR + 0x1515)
-#define PM2CTL			ECREG(EC_REG_BASE_ADDR + 0x1516)
-#define PM2IC			ECREG(EC_REG_BASE_ADDR + 0x1517)
-#define PM2IE			ECREG(EC_REG_BASE_ADDR + 0x1518)
-/* Mailbox */
-#define MBXCTRL			ECREG(EC_REG_BASE_ADDR + 0x1519)
-/* 16-byte PMC2EX Mailbox 0 ~ Mailbox 15 */
-#define MBXEC_00		ECREG(EC_REG_BASE_ADDR + 0x15F0)
-#define MBXEC_01		ECREG(EC_REG_BASE_ADDR + 0x15F1)
-#define MBXEC_02		ECREG(EC_REG_BASE_ADDR + 0x15F2)
-#define MBXEC_03		ECREG(EC_REG_BASE_ADDR + 0x15F3)
-#define MBXEC_04		ECREG(EC_REG_BASE_ADDR + 0x15F4)
-#define MBXEC_05		ECREG(EC_REG_BASE_ADDR + 0x15F5)
-#define MBXEC_06		ECREG(EC_REG_BASE_ADDR + 0x15F6)
-#define MBXEC_07		ECREG(EC_REG_BASE_ADDR + 0x15F7)
-#define MBXEC_08		ECREG(EC_REG_BASE_ADDR + 0x15F8)
-#define MBXEC_09		ECREG(EC_REG_BASE_ADDR + 0x15F9)
-#define MBXEC_10		ECREG(EC_REG_BASE_ADDR + 0x15FA)
-#define MBXEC_11		ECREG(EC_REG_BASE_ADDR + 0x15FB)
-#define MBXEC_12		ECREG(EC_REG_BASE_ADDR + 0x15FC)
-#define MBXEC_13		ECREG(EC_REG_BASE_ADDR + 0x15FD)
-#define MBXEC_14		ECREG(EC_REG_BASE_ADDR + 0x15FE)
-#define MBXEC_15		ECREG(EC_REG_BASE_ADDR + 0x15FF)
-#define PM3STS			ECREG(EC_REG_BASE_ADDR + 0x1520)
-#define PM3DO			ECREG(EC_REG_BASE_ADDR + 0x1521)
-#define PM3DI			ECREG(EC_REG_BASE_ADDR + 0x1522)
-#define PM3CTL			ECREG(EC_REG_BASE_ADDR + 0x1523)
-#define PM3IC			ECREG(EC_REG_BASE_ADDR + 0x1524)
-#define PM3IE			ECREG(EC_REG_BASE_ADDR + 0x1525)
-#define PM4STS			ECREG(EC_REG_BASE_ADDR + 0x1530)
-#define PM4DO			ECREG(EC_REG_BASE_ADDR + 0x1531)
-#define PM4DI			ECREG(EC_REG_BASE_ADDR + 0x1532)
-#define PM4CTL			ECREG(EC_REG_BASE_ADDR + 0x1533)
-#define PM4IC			ECREG(EC_REG_BASE_ADDR + 0x1534)
-#define PM4IE			ECREG(EC_REG_BASE_ADDR + 0x1535)
-#define PM5STS			ECREG(EC_REG_BASE_ADDR + 0x1540)
-#define PM5DO			ECREG(EC_REG_BASE_ADDR + 0x1541)
-#define PM5DI			ECREG(EC_REG_BASE_ADDR + 0x1542)
-#define PM5CTL			ECREG(EC_REG_BASE_ADDR + 0x1543)
-#define PM5IC			ECREG(EC_REG_BASE_ADDR + 0x1544)
-#define PM5IE			ECREG(EC_REG_BASE_ADDR + 0x1545)
-
-/* PM Status Register */
-#define SMIEVT			BIT(6)
-#define SCIEVT			BIT(5)
-#define BURST			BIT(4)
-#define P_C_D			BIT(3)
-#define P_IBF			BIT(1)
-#define P_OBF			BIT(0)
-
-/* PM Control */
-#define APM			BIT(7)
-#define SCINP			BIT(6)
-#define OBEIE			BIT(1)
-#define IBFIE			BIT(0)
-
-/* PM Interrupt Control */
-#define SMINP			BIT(6)
-#define SCIB			BIT(2)
-#define SMIB			BIT(1)
-#define IRQB			BIT(0)
-
-/* PM Interrupt Enable */
-#define HWSMIEN			BIT(5)
-#define HWSCIEN			BIT(4)
-#define HWIRQEN			BIT(3)
-#define SMIEN			BIT(2)
-#define SCIEN			BIT(1)
-#define IRQEN			BIT(0)
-
-/* PM Interrupt Enable */
-#define MBXEN			BIT(7)
-
-/**
- *
  * (16XXh) General Purpose I/O Control Register
  *
  */
@@ -855,105 +503,22 @@
 #define GCR19			ECREG(EC_REG_BASE_ADDR + 0x16E4)
 #define GCR20			ECREG(EC_REG_BASE_ADDR + 0x16E5)
 #define GCR21			ECREG(EC_REG_BASE_ADDR + 0x16E6)
-#define GPDRA			ECREG(EC_REG_BASE_ADDR + 0x1601)
-#define GPDRB			ECREG(EC_REG_BASE_ADDR + 0x1602)
-#define GPDRC			ECREG(EC_REG_BASE_ADDR + 0x1603)
-#define GPDRD			ECREG(EC_REG_BASE_ADDR + 0x1604)
-#define GPDRE			ECREG(EC_REG_BASE_ADDR + 0x1605)
-#define GPDRF			ECREG(EC_REG_BASE_ADDR + 0x1606)
-#define GPDRG			ECREG(EC_REG_BASE_ADDR + 0x1607)
-#define GPDRH			ECREG(EC_REG_BASE_ADDR + 0x1608)
-#define GPDRI			ECREG(EC_REG_BASE_ADDR + 0x1609)
-#define GPDRJ			ECREG(EC_REG_BASE_ADDR + 0x160A)
-#define GPDRM			ECREG(EC_REG_BASE_ADDR + 0x160D)
 
+/*
+ * TODO: use pinmux driver to enable uart function so we can remove these
+ * registers' declaration.
+ */
 /* GPIO control register */
-#define GPCRA0			ECREG(EC_REG_BASE_ADDR + 0x1610)
-#define GPCRA1			ECREG(EC_REG_BASE_ADDR + 0x1611)
-#define GPCRA2			ECREG(EC_REG_BASE_ADDR + 0x1612)
-#define GPCRA3			ECREG(EC_REG_BASE_ADDR + 0x1613)
-#define GPCRA4			ECREG(EC_REG_BASE_ADDR + 0x1614)
-#define GPCRA5			ECREG(EC_REG_BASE_ADDR + 0x1615)
-#define GPCRA6			ECREG(EC_REG_BASE_ADDR + 0x1616)
-#define GPCRA7			ECREG(EC_REG_BASE_ADDR + 0x1617)
 #define GPCRB0			ECREG(EC_REG_BASE_ADDR + 0x1618)
 #define GPCRB1			ECREG(EC_REG_BASE_ADDR + 0x1619)
-#define GPCRB2			ECREG(EC_REG_BASE_ADDR + 0x161A)
-#define GPCRB3			ECREG(EC_REG_BASE_ADDR + 0x161B)
-#define GPCRB4			ECREG(EC_REG_BASE_ADDR + 0x161C)
-#define GPCRB5			ECREG(EC_REG_BASE_ADDR + 0x161D)
-#define GPCRB6			ECREG(EC_REG_BASE_ADDR + 0x161E)
-#define GPCRB7			ECREG(EC_REG_BASE_ADDR + 0x161F)
-#define GPCRC0			ECREG(EC_REG_BASE_ADDR + 0x1620)
-#define GPCRC1			ECREG(EC_REG_BASE_ADDR + 0x1621)
-#define GPCRC2			ECREG(EC_REG_BASE_ADDR + 0x1622)
-#define GPCRC3			ECREG(EC_REG_BASE_ADDR + 0x1623)
-#define GPCRC4			ECREG(EC_REG_BASE_ADDR + 0x1624)
-#define GPCRC5			ECREG(EC_REG_BASE_ADDR + 0x1625)
-#define GPCRC6			ECREG(EC_REG_BASE_ADDR + 0x1626)
-#define GPCRC7			ECREG(EC_REG_BASE_ADDR + 0x1627)
-#define GPCRD0			ECREG(EC_REG_BASE_ADDR + 0x1628)
-#define GPCRD1			ECREG(EC_REG_BASE_ADDR + 0x1629)
-#define GPCRD2			ECREG(EC_REG_BASE_ADDR + 0x162A)
-#define GPCRD3			ECREG(EC_REG_BASE_ADDR + 0x162B)
-#define GPCRD4			ECREG(EC_REG_BASE_ADDR + 0x162C)
 #define GPCRD5			ECREG(EC_REG_BASE_ADDR + 0x162D)
-#define GPCRD6			ECREG(EC_REG_BASE_ADDR + 0x162E)
-#define GPCRD7			ECREG(EC_REG_BASE_ADDR + 0x162F)
-#define GPCRE0			ECREG(EC_REG_BASE_ADDR + 0x1630)
-#define GPCRE1			ECREG(EC_REG_BASE_ADDR + 0x1631)
-#define GPCRE2			ECREG(EC_REG_BASE_ADDR + 0x1632)
-#define GPCRE3			ECREG(EC_REG_BASE_ADDR + 0x1633)
-#define GPCRE4			ECREG(EC_REG_BASE_ADDR + 0x1634)
 #define GPCRE5			ECREG(EC_REG_BASE_ADDR + 0x1635)
-#define GPCRE6			ECREG(EC_REG_BASE_ADDR + 0x1636)
-#define GPCRE7			ECREG(EC_REG_BASE_ADDR + 0x1637)
-#define GPCRF0			ECREG(EC_REG_BASE_ADDR + 0x1638)
-#define GPCRF1			ECREG(EC_REG_BASE_ADDR + 0x1639)
-#define GPCRF2			ECREG(EC_REG_BASE_ADDR + 0x163A)
 #define GPCRF3			ECREG(EC_REG_BASE_ADDR + 0x163B)
 #define GPCRF4			ECREG(EC_REG_BASE_ADDR + 0x163C)
 #define GPCRF5			ECREG(EC_REG_BASE_ADDR + 0x163D)
-#define GPCRF6			ECREG(EC_REG_BASE_ADDR + 0x163E)
-#define GPCRF7			ECREG(EC_REG_BASE_ADDR + 0x163F)
-#define GPCRG0			ECREG(EC_REG_BASE_ADDR + 0x1640)
-#define GPCRG1			ECREG(EC_REG_BASE_ADDR + 0x1641)
-#define GPCRG2			ECREG(EC_REG_BASE_ADDR + 0x1642)
-#define GPCRG3			ECREG(EC_REG_BASE_ADDR + 0x1643)
-#define GPCRG4			ECREG(EC_REG_BASE_ADDR + 0x1644)
-#define GPCRG5			ECREG(EC_REG_BASE_ADDR + 0x1645)
-#define GPCRG6			ECREG(EC_REG_BASE_ADDR + 0x1646)
-#define GPCRG7			ECREG(EC_REG_BASE_ADDR + 0x1647)
-#define GPCRH0			ECREG(EC_REG_BASE_ADDR + 0x1648)
 #define GPCRH1			ECREG(EC_REG_BASE_ADDR + 0x1649)
 #define GPCRH2			ECREG(EC_REG_BASE_ADDR + 0x164A)
-#define GPCRH3			ECREG(EC_REG_BASE_ADDR + 0x164B)
-#define GPCRH4			ECREG(EC_REG_BASE_ADDR + 0x164C)
-#define GPCRH5			ECREG(EC_REG_BASE_ADDR + 0x164D)
-#define GPCRH6			ECREG(EC_REG_BASE_ADDR + 0x164E)
-#define GPCRI0			ECREG(EC_REG_BASE_ADDR + 0x1650)
-#define GPCRI1			ECREG(EC_REG_BASE_ADDR + 0x1651)
-#define GPCRI2			ECREG(EC_REG_BASE_ADDR + 0x1652)
-#define GPCRI3			ECREG(EC_REG_BASE_ADDR + 0x1653)
-#define GPCRI4			ECREG(EC_REG_BASE_ADDR + 0x1654)
-#define GPCRI5			ECREG(EC_REG_BASE_ADDR + 0x1655)
-#define GPCRI6			ECREG(EC_REG_BASE_ADDR + 0x1656)
 #define GPCRI7			ECREG(EC_REG_BASE_ADDR + 0x1657)
-#define GPCRJ0			ECREG(EC_REG_BASE_ADDR + 0x1658)
-#define GPCRJ1			ECREG(EC_REG_BASE_ADDR + 0x1659)
-#define GPCRJ2			ECREG(EC_REG_BASE_ADDR + 0x165A)
-#define GPCRJ3			ECREG(EC_REG_BASE_ADDR + 0x165B)
-#define GPCRJ4			ECREG(EC_REG_BASE_ADDR + 0x165C)
-#define GPCRJ5			ECREG(EC_REG_BASE_ADDR + 0x165D)
-#define GPCRJ6			ECREG(EC_REG_BASE_ADDR + 0x165E)
-#define GPCRJ7			ECREG(EC_REG_BASE_ADDR + 0x165F)
-#define GPCRM0			ECREG(EC_REG_BASE_ADDR + 0x16A0)
-#define GPCRM1			ECREG(EC_REG_BASE_ADDR + 0x16A1)
-#define GPCRM2			ECREG(EC_REG_BASE_ADDR + 0x16A2)
-#define GPCRM3			ECREG(EC_REG_BASE_ADDR + 0x16A3)
-#define GPCRM4			ECREG(EC_REG_BASE_ADDR + 0x16A4)
-#define GPCRM5			ECREG(EC_REG_BASE_ADDR + 0x16A5)
-#define GPCRM6			ECREG(EC_REG_BASE_ADDR + 0x16A6)
 
 /* Port Data Mirror Register */
 #define GPDMRA			ECREG(EC_REG_BASE_ADDR + 0x1661)
@@ -967,13 +532,11 @@
 #define GPDMRI			ECREG(EC_REG_BASE_ADDR + 0x1669)
 #define GPDMRJ			ECREG(EC_REG_BASE_ADDR + 0x166A)
 #define GPDMRM			ECREG(EC_REG_BASE_ADDR + 0x166D)
-#define GPOTA			ECREG(EC_REG_BASE_ADDR + 0x1671)
-#define GPOTB			ECREG(EC_REG_BASE_ADDR + 0x1672)
-#define GPOTD			ECREG(EC_REG_BASE_ADDR + 0x1674)
-#define GPOTE			ECREG(EC_REG_BASE_ADDR + 0x1675)
-#define GPOTF			ECREG(EC_REG_BASE_ADDR + 0x1676)
-#define GPOTH			ECREG(EC_REG_BASE_ADDR + 0x1678)
-#define GPOTJ			ECREG(EC_REG_BASE_ADDR + 0x167A)
+
+#define GPCR_PORT_PIN_MODE_INPUT    BIT(7)
+#define GPCR_PORT_PIN_MODE_OUTPUT   BIT(6)
+#define GPCR_PORT_PIN_MODE_PULLUP   BIT(2)
+#define GPCR_PORT_PIN_MODE_PULLDOWN BIT(1)
 
 /**
  *
@@ -1013,56 +576,70 @@
 #define CLS			BIT(1)
 #define DLS			BIT(0)
 
+/*
+ * IT8XXX2 register structure size/offset checking macro function to mitigate
+ * the risk of unexpected compiling results.
+ */
+#define IT8XXX2_REG_SIZE_CHECK(reg_def, size) \
+	BUILD_ASSERT(sizeof(struct reg_def) == size, \
+		"Failed in size check of register structure!")
+#define IT8XXX2_REG_OFFSET_CHECK(reg_def, member, offset) \
+	BUILD_ASSERT(offsetof(struct reg_def, member) == offset, \
+		"Failed in offset check of register structure member!")
+
 /**
  *
  * (18xxh) PWM & SmartAuto Fan Control (PWM)
  *
  */
-#define C0CPRS			ECREG(EC_REG_BASE_ADDR + 0x1800)
-#define CTR			ECREG(EC_REG_BASE_ADDR + 0x1801)
-#define DCR0			ECREG(EC_REG_BASE_ADDR + 0x1802)
-#define DCR1			ECREG(EC_REG_BASE_ADDR + 0x1803)
-#define DCR2			ECREG(EC_REG_BASE_ADDR + 0x1804)
-#define DCR3			ECREG(EC_REG_BASE_ADDR + 0x1805)
-#define DCR4			ECREG(EC_REG_BASE_ADDR + 0x1806)
-#define DCR5			ECREG(EC_REG_BASE_ADDR + 0x1807)
-#define DCR6			ECREG(EC_REG_BASE_ADDR + 0x1808)
-#define DCR7			ECREG(EC_REG_BASE_ADDR + 0x1809)
-#define PWMPOL			ECREG(EC_REG_BASE_ADDR + 0x180A)
-#define PCFSR			ECREG(EC_REG_BASE_ADDR + 0x180B)
-#define PCSSGL			ECREG(EC_REG_BASE_ADDR + 0x180C)
-#define PCSSGH			ECREG(EC_REG_BASE_ADDR + 0x180D)
-#define CR256PCSSG		ECREG(EC_REG_BASE_ADDR + 0x180E)
-#define PCSGR			ECREG(EC_REG_BASE_ADDR + 0x180F)
-#define F1TLRR			ECREG(EC_REG_BASE_ADDR + 0x181E)
-#define F1TMRR			ECREG(EC_REG_BASE_ADDR + 0x181F)
-#define F2TLRR			ECREG(EC_REG_BASE_ADDR + 0x1820)
-#define F2TMRR			ECREG(EC_REG_BASE_ADDR + 0x1821)
-#define ZINTSCR			ECREG(EC_REG_BASE_ADDR + 0x1822)
-#define ZTIER			ECREG(EC_REG_BASE_ADDR + 0x1823)
-#define TSWCTLR			ECREG(EC_REG_BASE_ADDR + 0x1824)
-#define C4CPRS			ECREG(EC_REG_BASE_ADDR + 0x1827)
-#define C4MCPRS			ECREG(EC_REG_BASE_ADDR + 0x1828)
-#define C6CPRS			ECREG(EC_REG_BASE_ADDR + 0x182B)
-#define C6MCPRS			ECREG(EC_REG_BASE_ADDR + 0x182C)
-#define C7CPRS			ECREG(EC_REG_BASE_ADDR + 0x182D)
-#define C7MCPRS			ECREG(EC_REG_BASE_ADDR + 0x182E)
-#define CLK6MSEL		ECREG(EC_REG_BASE_ADDR + 0x1840)
-#define CTR1			ECREG(EC_REG_BASE_ADDR + 0x1841)
-#define CTR2			ECREG(EC_REG_BASE_ADDR + 0x1842)
-#define CTR3			ECREG(EC_REG_BASE_ADDR + 0x1843)
-#define PWM5TOCTRL		ECREG(EC_REG_BASE_ADDR + 0x1844)
-#define CFLRR			ECREG(EC_REG_BASE_ADDR + 0x1845)
-#define CFMRR			ECREG(EC_REG_BASE_ADDR + 0x1846)
-#define CFINTCTRL		ECREG(EC_REG_BASE_ADDR + 0x1847)
-#define TSWCTRL			ECREG(EC_REG_BASE_ADDR + 0x1848)
-#define PWMODENR		ECREG(EC_REG_BASE_ADDR + 0x1849)
-#define PWM0LHE			ECREG(EC_REG_BASE_ADDR + 0x1850)
-#define PWM0LCR1		ECREG(EC_REG_BASE_ADDR + 0x1851)
-#define PWM0LCR2		ECREG(EC_REG_BASE_ADDR + 0x1852)
-#define PWM1LHE			ECREG(EC_REG_BASE_ADDR + 0x1853)
-#define PWM1LCR1		ECREG(EC_REG_BASE_ADDR + 0x1854)
-#define PWM1LCR2		ECREG(EC_REG_BASE_ADDR + 0x1855)
+#ifndef __ASSEMBLER__
+struct pwm_it8xxx2_regs {
+	/* 0x000: Channel0 Clock Prescaler */
+	volatile uint8_t C0CPRS;
+	/* 0x001: Cycle Time0 */
+	volatile uint8_t CTR;
+	/* 0x002~0x00A: Reserved1 */
+	volatile uint8_t Reserved1[9];
+	/* 0x00B: Prescaler Clock Frequency Select */
+	volatile uint8_t PCFSR;
+	/* 0x00C~0x00F: Reserved2 */
+	volatile uint8_t Reserved2[4];
+	/* 0x010: Cycle Time1 MSB */
+	volatile uint8_t CTR1M;
+	/* 0x011~0x022: Reserved3 */
+	volatile uint8_t Reserved3[18];
+	/* 0x023: PWM Clock Control */
+	volatile uint8_t ZTIER;
+	/* 0x024~0x026: Reserved4 */
+	volatile uint8_t Reserved4[3];
+	/* 0x027: Channel4 Clock Prescaler */
+	volatile uint8_t C4CPRS;
+	/* 0x028: Channel4 Clock Prescaler MSB */
+	volatile uint8_t C4MCPRS;
+	/* 0x029~0x02A: Reserved5 */
+	volatile uint8_t Reserved5[2];
+	/* 0x02B: Channel6 Clock Prescaler */
+	volatile uint8_t C6CPRS;
+	/* 0x02C: Channel6 Clock Prescaler MSB */
+	volatile uint8_t C6MCPRS;
+	/* 0x02D: Channel7 Clock Prescaler */
+	volatile uint8_t C7CPRS;
+	/* 0x02E: Channel7 Clock Prescaler MSB */
+	volatile uint8_t C7MCPRS;
+	/* 0x02F~0x040: Reserved6 */
+	volatile uint8_t reserved6[18];
+	/* 0x041: Cycle Time1 */
+	volatile uint8_t CTR1;
+	/* 0x042: Cycle Time2 */
+	volatile uint8_t CTR2;
+	/* 0x043: Cycle Time3 */
+	volatile uint8_t CTR3;
+};
+#endif /* !__ASSEMBLER__ */
+
+/* PWM register fields */
+/* 0x023: PWM Clock Control */
+#define IT8XXX2_PWM_PCCE		BIT(1)
 
 /**
  *
@@ -1137,61 +714,19 @@
 #define PORSREGA		ECREG(EC_REG_BASE_ADDR + 0x1A14)
 #define PORSREGB		ECREG(EC_REG_BASE_ADDR + 0x1A15)
 
-/**
- *
- * (1Bxxh) Wack-Up control (WUC)
- *
- */
-#define WUEMR1			ECREG(EC_REG_BASE_ADDR + 0x1B00)
-#define WUEMR2			ECREG(EC_REG_BASE_ADDR + 0x1B01)
-#define WUEMR3			ECREG(EC_REG_BASE_ADDR + 0x1B02)
-#define WUEMR4			ECREG(EC_REG_BASE_ADDR + 0x1B03)
-#define WUEMR6			ECREG(EC_REG_BASE_ADDR + 0x1B10)
-#define WUEMR7			ECREG(EC_REG_BASE_ADDR + 0x1B14)
-#define WUEMR8			ECREG(EC_REG_BASE_ADDR + 0x1B18)
-#define WUEMR9			ECREG(EC_REG_BASE_ADDR + 0x1B1C)
-#define WUEMR10			ECREG(EC_REG_BASE_ADDR + 0x1B20)
-#define WUEMR11			ECREG(EC_REG_BASE_ADDR + 0x1B24)
-#define WUEMR12			ECREG(EC_REG_BASE_ADDR + 0x1B28)
-#define WUEMR13			ECREG(EC_REG_BASE_ADDR + 0x1B2C)
-#define WUEMR14			ECREG(EC_REG_BASE_ADDR + 0x1B30)
-#define WUESR1			ECREG(EC_REG_BASE_ADDR + 0x1B04)
-#define WUESR2			ECREG(EC_REG_BASE_ADDR + 0x1B05)
-#define WUESR3			ECREG(EC_REG_BASE_ADDR + 0x1B06)
-#define WUESR4			ECREG(EC_REG_BASE_ADDR + 0x1B07)
-#define WUESR6			ECREG(EC_REG_BASE_ADDR + 0x1B11)
-#define WUESR7			ECREG(EC_REG_BASE_ADDR + 0x1B15)
-#define WUESR8			ECREG(EC_REG_BASE_ADDR + 0x1B19)
-#define WUESR9			ECREG(EC_REG_BASE_ADDR + 0x1B1D)
-#define WUESR10			ECREG(EC_REG_BASE_ADDR + 0x1B21)
-#define WUESR11			ECREG(EC_REG_BASE_ADDR + 0x1B25)
-#define WUESR12			ECREG(EC_REG_BASE_ADDR + 0x1B29)
-#define WUESR13			ECREG(EC_REG_BASE_ADDR + 0x1B2D)
-#define WUESR14			ECREG(EC_REG_BASE_ADDR + 0x1B31)
-#define WUENR1			ECREG(EC_REG_BASE_ADDR + 0x1B08)
-#define WUENR2			ECREG(EC_REG_BASE_ADDR + 0x1B09)
-#define WUENR3			ECREG(EC_REG_BASE_ADDR + 0x1B0A)
-#define WUENR4			ECREG(EC_REG_BASE_ADDR + 0x1B0B)
-#define WUENR6			ECREG(EC_REG_BASE_ADDR + 0x1B12)
-#define WUENR7			ECREG(EC_REG_BASE_ADDR + 0x1B16)
-#define WUENR8			ECREG(EC_REG_BASE_ADDR + 0x1B1A)
-#define WUENR9			ECREG(EC_REG_BASE_ADDR + 0x1B1E)
+/* --- Wake-Up Control (WUC) --- */
+#define IT8XXX2_WUC_BASE   0x00F01B00
 
-#define WUEMR6_BASE		(EC_REG_BASE_ADDR + 0x1B10)
-#define WUESR6_BASE		(EC_REG_BASE_ADDR + 0x1B11)
-#define WUBEMR6			ECREG(EC_REG_BASE_ADDR + 0x1B13)
-#define WUEMR8_BASE		(EC_REG_BASE_ADDR + 0x1B18)
-#define WUESR8_BASE		(EC_REG_BASE_ADDR + 0x1B19)
-#define WUBEMR8			ECREG(EC_REG_BASE_ADDR + 0x1B1B)
-#define WUEMR9_BASE		(EC_REG_BASE_ADDR + 0x1B1C)
-#define WUESR9_BASE		(EC_REG_BASE_ADDR + 0x1B1D)
-#define WUBEMR9			ECREG(EC_REG_BASE_ADDR + 0x1B1F)
-#define WUEMR10_BASE		(EC_REG_BASE_ADDR + 0x1B20)
-#define WUESR10_BASE		(EC_REG_BASE_ADDR + 0x1B21)
-#define WUBEMR10		ECREG(EC_REG_BASE_ADDR + 0x1B23)
-#define WUEMR11_BASE		(EC_REG_BASE_ADDR + 0x1B24)
-#define WUESR11_BASE		(EC_REG_BASE_ADDR + 0x1B25)
-#define WUBEMR11		ECREG(EC_REG_BASE_ADDR + 0x1B27)
+/* TODO: should a defined interface for configuring wake-up interrupts */
+#define IT8XXX2_WUC_WUEMR1 (IT8XXX2_WUC_BASE + 0x00)
+#define IT8XXX2_WUC_WUEMR3 (IT8XXX2_WUC_BASE + 0x02)
+#define IT8XXX2_WUC_WUEMR5 (IT8XXX2_WUC_BASE + 0x0c)
+#define IT8XXX2_WUC_WUESR1 (IT8XXX2_WUC_BASE + 0x04)
+#define IT8XXX2_WUC_WUESR3 (IT8XXX2_WUC_BASE + 0x06)
+#define IT8XXX2_WUC_WUESR5 (IT8XXX2_WUC_BASE + 0x0d)
+#define IT8XXX2_WUC_WUENR3 (IT8XXX2_WUC_BASE + 0x0a)
+#define IT8XXX2_WUC_WUBEMR1 (IT8XXX2_WUC_BASE + 0x3c)
+#define IT8XXX2_WUC_WUBEMR5 (IT8XXX2_WUC_BASE + 0x0f)
 
 /**
  *
@@ -1302,114 +837,54 @@
 
 /**
  *
- * (1Dxxh) Keyboard Matrix Scan control (KBS)
+ * (1Dxxh) Keyboard Matrix Scan control (KSCAN)
  *
  */
-#define KSOL			ECREG(EC_REG_BASE_ADDR + 0x1D00)
-#define KSOH1			ECREG(EC_REG_BASE_ADDR + 0x1D01)
-#define KSOCTRL			ECREG(EC_REG_BASE_ADDR + 0x1D02)
-#define KSOH2			ECREG(EC_REG_BASE_ADDR + 0x1D03)
-#define KSI			ECREG(EC_REG_BASE_ADDR + 0x1D04)
-#define KSICTRL			ECREG(EC_REG_BASE_ADDR + 0x1D05)
-#define KSIGCTRL		ECREG(EC_REG_BASE_ADDR + 0x1D06)
-#define KSIGOEN			ECREG(EC_REG_BASE_ADDR + 0x1D07)
-#define KSIGDAT			ECREG(EC_REG_BASE_ADDR + 0x1D08)
-#define KSIGDMRR		ECREG(EC_REG_BASE_ADDR + 0x1D09)
-#define KSOHGCTRL		ECREG(EC_REG_BASE_ADDR + 0x1D0A)
-#define KSOHGOEN		ECREG(EC_REG_BASE_ADDR + 0x1D0B)
-#define KSOHGDMRR		ECREG(EC_REG_BASE_ADDR + 0x1D0C)
-#define KSOLGCTRL		ECREG(EC_REG_BASE_ADDR + 0x1D0D)
-#define KSOLGOEN		ECREG(EC_REG_BASE_ADDR + 0x1D0E)
-#define KSOLGDMRR		ECREG(EC_REG_BASE_ADDR + 0x1D0F)
-#define KSO0LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D10)
-#define KSO1LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D11)
-#define KSO2LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D12)
-#define KSO3LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D13)
-#define KSO4LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D14)
-#define KSO5LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D15)
-#define KSO6LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D16)
-#define KSO7LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D17)
-#define KSO8LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D18)
-#define KSO9LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D19)
-#define KSO10LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D1A)
-#define KSO11LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D1B)
-#define KSO12LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D1C)
-#define KSO13LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D1D)
-#define KSO14LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D1E)
-#define KSO15LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D1F)
-#define KSO16LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D20)
-#define KSO17LSDR		ECREG(EC_REG_BASE_ADDR + 0x1D21)
-#define SDC1R			ECREG(EC_REG_BASE_ADDR + 0x1D22)
-#define SDEN			BIT(7)
-#define INTSDVEN		BIT(5)
+#ifndef __ASSEMBLER__
+struct kscan_it8xxx2_regs {
+	/* 0x000: Keyboard Scan Out */
+	volatile uint8_t KBS_KSOL;
+	/* 0x001: Keyboard Scan Out */
+	volatile uint8_t KBS_KSOH1;
+	/* 0x002: Keyboard Scan Out Control */
+	volatile uint8_t KBS_KSOCTRL;
+	/* 0x003: Keyboard Scan Out */
+	volatile uint8_t KBS_KSOH2;
+	/* 0x004: Keyboard Scan In */
+	volatile uint8_t KBS_KSI;
+	/* 0x005: Keyboard Scan In Control */
+	volatile uint8_t KBS_KSICTRL;
+	/* 0x006: Keyboard Scan In [7:0] GPIO Control */
+	volatile uint8_t KBS_KSIGCTRL;
+	/* 0x007: Keyboard Scan In [7:0] GPIO Output Enable */
+	volatile uint8_t KBS_KSIGOEN;
+	/* 0x008: Keyboard Scan In [7:0] GPIO Data */
+	volatile uint8_t KBS_KSIGDAT;
+	/* 0x009: Keyboard Scan In [7:0] GPIO Data Mirror */
+	volatile uint8_t KBS_KSIGDMRR;
+	/* 0x00A: Keyboard Scan Out [15:8] GPIO Control */
+	volatile uint8_t KBS_KSOHGCTRL;
+	/* 0x00B: Keyboard Scan Out [15:8] GPIO Output Enable */
+	volatile uint8_t KBS_KSOHGOEN;
+	/* 0x00C: Keyboard Scan Out [15:8] GPIO Data Mirror */
+	volatile uint8_t KBS_KSOHGDMRR;
+	/* 0x00D: Keyboard Scan Out [7:0] GPIO Control */
+	volatile uint8_t KBS_KSOLGCTRL;
+	/* 0x00E: Keyboard Scan Out [7:0] GPIO Output Enable */
+	volatile uint8_t KBS_KSOLGOEN;
+};
+#endif /* !__ASSEMBLER__ */
 
-/* BIT2 ~ BIT0  Scan loop select */
-#define SLS_00_ROUND		0x00
-#define SLS_02_ROUND		0x01
-#define SLS_03_ROUND		0x02
-#define SLS_04_ROUND		0x03
-#define SLS_05_ROUND		0x04
-#define SLS_06_ROUND		0x05
-#define SLS_07_ROUND		0x06
-#define SLS_08_ROUND		0x07
-
-#define SDC2R			ECREG(EC_REG_BASE_ADDR + 0x1D23)
-#define KSOPCS1			BIT(7)
-#define KSOPCS0			BIT(6)
-
-/* BIT3 ~ BIT0  Wait KSO high delay */
-#define WKSOHDLY_23US		0x00
-#define WKSOHDLY_31US		0x01
-#define WKSOHDLY_39US		0x02
-#define WKSOHDLY_47US		0x03
-#define WKSOHDLY_55US		0x04
-#define WKSOHDLY_63US		0x05
-#define WKSOHDLY_71US		0x06
-#define WKSOHDLY_79US		0x07
-#define WKSOHDLY_87US		0x08
-#define WKSOHDLY_95US		0x09
-
-#define SDC3R			ECREG(EC_REG_BASE_ADDR + 0x1D24)
-
-/* BIT7 ~ BIT4  Wait KSO low delay */
-#define WKSOLDLY_11US		(0x00 << 4)
-#define WKSOLDLY_13US		(0x01 << 4)
-#define WKSOLDLY_15US		(0x02 << 4)
-#define WKSOLDLY_17US		(0x03 << 4)
-#define WKSOLDLY_19US		(0x04 << 4)
-#define WKSOLDLY_21US		(0x05 << 4)
-#define WKSOLDLY_23US		(0x06 << 4)
-#define WKSOLDLY_25US		(0x07 << 4)
-#define WKSOLDLY_27US		(0x08 << 4)
-#define WKSOLDLY_29US		(0x09 << 4)
-
-/* BIT3 ~ BIT0  Spacing delay between rounds */
-#define SDLYBR_00MS		0x00
-#define SDLYBR_01MS		0x01
-#define SDLYBR_02MS		0x02
-#define SDLYBR_03MS		0x03
-#define SDLYBR_04MS		0x04
-#define SDLYBR_05MS		0x05
-#define SDLYBR_06MS		0x06
-#define SDLYBR_07MS		0x07
-#define SDLYBR_08MS		0x08
-#define SDLYBR_09MS		0x09
-#define SDLYBR_10MS		0x0A
-#define SDLYBR_11MS		0x0B
-#define SDLYBR_12MS		0x0C
-#define SDLYBR_13MS		0x0D
-#define SDLYBR_14MS		0x0E
-#define SDLYBR_15MS		0x0F
-
-#define SDSR			ECREG(EC_REG_BASE_ADDR + 0x1D25)
-#define SDV			BIT(0)
-
-/* Keyboard Scan Out Control Register */
-#define KSOPU			BIT(2)
-#define KSOOD			BIT(0)
-
-/* Keyboard Scan In Control Register */
-#define KSIPU			BIT(2)
+/* KBS register fields */
+/* 0x002: Keyboard Scan Out Control */
+#define IT8XXX2_KBS_KSOPU	BIT(2)
+#define IT8XXX2_KBS_KSOOD	BIT(0)
+/* 0x005: Keyboard Scan In Control */
+#define IT8XXX2_KBS_KSIPU	BIT(2)
+/* 0x00D: Keyboard Scan Out [7:0] GPIO Control */
+#define IT8XXX2_KBS_KSO2GCTRL	BIT(2)
+/* 0x00E: Keyboard Scan Out [7:0] GPIO Output Enable */
+#define IT8XXX2_KBS_KSO2GOEN	BIT(2)
 
 /**
  *
@@ -1443,63 +918,123 @@
  * (1Fxxh) External Timer & External Watchdog (ETWD)
  *
  */
-#define ETWCFG			ECREG(EC_REG_BASE_ADDR + 0x1F01)
-#define EWDKEYEN		BIT(5)
-#define EWDSRC			BIT(4)
-#define LEWDCNTL		BIT(3)
-#define LET1CNTL		BIT(2)
-#define LET1PS			BIT(1)
-#define LETWCFG			BIT(0)
-#define ET1PSR			ECREG(EC_REG_BASE_ADDR + 0x1F02)
-#define ET1CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F03)
-#define ET1CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F04)
-#define ETWCTRL			ECREG(EC_REG_BASE_ADDR + 0x1F05)
-#define EWDSCEN			BIT(5)
-#define EWDSCMS			BIT(4)
-#define ET2TC			BIT(3)
-#define ET2RST			BIT(2)
-#define ET1TC			BIT(1)
-#define ET1RST			BIT(0)
-#define EWDCNTLR		ECREG(EC_REG_BASE_ADDR + 0x1F06)
-#define EWDKEYR			ECREG(EC_REG_BASE_ADDR + 0x1F07)
-#define EWDCNTHR		ECREG(EC_REG_BASE_ADDR + 0x1F09)
-#define ET2PSR			ECREG(EC_REG_BASE_ADDR + 0x1F0A)
-#define ET2CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F0B)
-#define ET2CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F0C)
-#define ET2CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F0E)
-#define ET3CTRL			ECREG(EC_REG_BASE_ADDR + 0x1F10)
-#define ET3PSR			ECREG(EC_REG_BASE_ADDR + 0x1F11)
-#define ET3CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F14)
-#define ET3CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F15)
-#define ET3CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F16)
-#define ET4CTRL			ECREG(EC_REG_BASE_ADDR + 0x1F18)
-#define ET4PSR			ECREG(EC_REG_BASE_ADDR + 0x1F19)
-#define ET4CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F1C)
-#define ET4CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F1D)
-#define ET4CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F1E)
-#define ET4CNTLH3R		ECREG(EC_REG_BASE_ADDR + 0x1F1F)
-#define ET5CTRL			ECREG(EC_REG_BASE_ADDR + 0x1F20)
-#define ET5PSR			ECREG(EC_REG_BASE_ADDR + 0x1F21)
-#define ET5CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F24)
-#define ET5CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F25)
-#define ET5CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F26)
-#define ET6CTRL			ECREG(EC_REG_BASE_ADDR + 0x1F28)
-#define ET6PSR			ECREG(EC_REG_BASE_ADDR + 0x1F29)
-#define ET6CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F2C)
-#define ET6CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F2D)
-#define ET6CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F2E)
-#define ET6CNTLH3R		ECREG(EC_REG_BASE_ADDR + 0x1F2F)
-#define ET7CTRL			ECREG(EC_REG_BASE_ADDR + 0x1F30)
-#define ET7PSR			ECREG(EC_REG_BASE_ADDR + 0x1F31)
-#define ET7CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F34)
-#define ET7CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F35)
-#define ET7CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F36)
-#define ET8CTRL			ECREG(EC_REG_BASE_ADDR + 0x1F38)
-#define ET8PSR			ECREG(EC_REG_BASE_ADDR + 0x1F39)
-#define ET8CNTLLR		ECREG(EC_REG_BASE_ADDR + 0x1F3C)
-#define ET8CNTLHR		ECREG(EC_REG_BASE_ADDR + 0x1F3D)
-#define ET8CNTLH2R		ECREG(EC_REG_BASE_ADDR + 0x1F3E)
-#define ET8CNTLH3R		ECREG(EC_REG_BASE_ADDR + 0x1F3F)
+#ifndef __ASSEMBLER__
+struct wdt_it8xxx2_regs {
+	/* 0x000: Reserved1 */
+	volatile uint8_t reserved1;
+	/* 0x001: External Timer1/WDT Configuration */
+	volatile uint8_t ETWCFG;
+	/* 0x002: External Timer1 Prescaler */
+	volatile uint8_t ET1PSR;
+	/* 0x003: External Timer1 Counter High Byte */
+	volatile uint8_t ET1CNTLHR;
+	/* 0x004: External Timer1 Counter Low Byte */
+	volatile uint8_t ET1CNTLLR;
+	/* 0x005: External Timer1/WDT Control */
+	volatile uint8_t ETWCTRL;
+	/* 0x006: External WDT Counter Low Byte */
+	volatile uint8_t EWDCNTLR;
+	/* 0x007: External WDT Key */
+	volatile uint8_t EWDKEYR;
+	/* 0x008: Reserved2 */
+	volatile uint8_t reserved2;
+	/* 0x009: External WDT Counter High Byte */
+	volatile uint8_t EWDCNTHR;
+	/* 0x00A: External Timer2 Prescaler */
+	volatile uint8_t ET2PSR;
+	/* 0x00B: External Timer2 Counter High Byte */
+	volatile uint8_t ET2CNTLHR;
+	/* 0x00C: External Timer2 Counter Low Byte */
+	volatile uint8_t ET2CNTLLR;
+	/* 0x00D: Reserved3 */
+	volatile uint8_t reserved3;
+	/* 0x00E: External Timer2 Counter High Byte2 */
+	volatile uint8_t ET2CNTLH2R;
+	/* 0x00F~0x03F: Reserved4 */
+	volatile uint8_t reserved4[49];
+	/* 0x040: External Timer1 Counter Observation Low Byte */
+	volatile uint8_t ET1CNTOLR;
+	/* 0x041: External Timer1 Counter Observation High Byte */
+	volatile uint8_t ET1CNTOHR;
+	/* 0x042~0x043: Reserved5 */
+	volatile uint8_t reserved5[2];
+	/* 0x044: External Timer1 Counter Observation Low Byte */
+	volatile uint8_t ET2CNTOLR;
+	/* 0x045: External Timer1 Counter Observation High Byte */
+	volatile uint8_t ET2CNTOHR;
+	/* 0x046: External Timer1 Counter Observation High Byte2 */
+	volatile uint8_t ET2CNTOH2R;
+	/* 0x047~0x05F: Reserved6 */
+	volatile uint8_t reserved6[25];
+	/* 0x060: External WDT Counter Observation Low Byte */
+	volatile uint8_t EWDCNTOLR;
+	/* 0x061: External WDT Counter Observation High Byte */
+	volatile uint8_t EWDCNTOHR;
+};
+#endif /* !__ASSEMBLER__ */
+
+/* WDT register fields */
+/* 0x001: External Timer1/WDT Configuration */
+#define IT8XXX2_WDT_EWDKEYEN		BIT(5)
+#define IT8XXX2_WDT_EWDSRC		BIT(4)
+#define IT8XXX2_WDT_LEWDCNTL		BIT(3)
+#define IT8XXX2_WDT_LET1CNTL		BIT(2)
+#define IT8XXX2_WDT_LET1PS		BIT(1)
+#define IT8XXX2_WDT_LETWCFG		BIT(0)
+/* 0x002: External Timer1 Prescaler */
+#define IT8XXX2_WDT_ETPS_32P768_KHZ	0x00
+#define IT8XXX2_WDT_ETPS_1P024_KHZ	0x01
+#define IT8XXX2_WDT_ETPS_32_HZ		0x02
+/* 0x005: External Timer1/WDT Control */
+#define IT8XXX2_WDT_EWDSCEN		BIT(5)
+#define IT8XXX2_WDT_EWDSCMS		BIT(4)
+#define IT8XXX2_WDT_ET2TC		BIT(3)
+#define IT8XXX2_WDT_ET2RST		BIT(2)
+#define IT8XXX2_WDT_ET1TC		BIT(1)
+#define IT8XXX2_WDT_ET1RST		BIT(0)
+
+/* External Timer register fields */
+/* External Timer 3~8 control */
+#define IT8XXX2_EXT_ETXRST		BIT(1)
+#define IT8XXX2_EXT_ETXEN		BIT(0)
+
+/* Control external timer3~8 */
+#define IT8XXX2_EXT_TIMER_BASE  DT_REG_ADDR(DT_NODELABEL(timer))  /*0x00F01F10*/
+#define IT8XXX2_EXT_CTRLX(n)    ECREG(IT8XXX2_EXT_TIMER_BASE + (n << 3))
+#define IT8XXX2_EXT_PSRX(n)     ECREG(IT8XXX2_EXT_TIMER_BASE + 0x01 + (n << 3))
+#define IT8XXX2_EXT_CNTX(n)     ECREG_u32(IT8XXX2_EXT_TIMER_BASE + 0x04 + \
+					(n << 3))
+#define IT8XXX2_EXT_CNTOX(n)    ECREG_u32(IT8XXX2_EXT_TIMER_BASE + 0x38 + \
+					(n << 2))
+
+/* Free run timer configurations */
+#define FREE_RUN_TIMER          EXT_TIMER_4
+#define FREE_RUN_TIMER_IRQ      DT_IRQ_BY_IDX(DT_NODELABEL(timer), 1, irq)
+/* Free run timer configurations */
+#define FREE_RUN_TIMER_FLAG     DT_IRQ_BY_IDX(DT_NODELABEL(timer), 1, flags)
+/* Free run timer max count is 36.4 hr (base on clock source 32768Hz) */
+#define FREE_RUN_TIMER_MAX_CNT  0xFFFFFFFFUL
+
+#ifndef __ASSEMBLER__
+enum ext_clk_src_sel {
+	EXT_PSR_32P768K = 0,
+	EXT_PSR_1P024K,
+	EXT_PSR_32,
+	EXT_PSR_8M,
+};
+/*
+ * 24-bit timers: external timer 3, 5, and 7
+ * 32-bit timers: external timer 4, 6, and 8
+ */
+enum ext_timer_idx {
+	EXT_TIMER_3 = 0,	/* Event timer */
+	EXT_TIMER_4,		/* Free run timer */
+	EXT_TIMER_5,
+	EXT_TIMER_6,
+	EXT_TIMER_7,
+	EXT_TIMER_8,
+};
+#endif
 
 /**
  *
@@ -1881,7 +1416,7 @@
 #define PECIHEN			BIT(3)
 #define CONCTRL			BIT(2)
 #define AWFCS_EN		BIT(1)
-#define START			BIT(0)
+#define PECISTART		BIT(0)
 #define HOCMDR			ECREG(EC_REG_BASE_ADDR + 0x2C02)
 #define HOTRADDR		ECREG(EC_REG_BASE_ADDR + 0x2C03)
 #define HOWRLR			ECREG(EC_REG_BASE_ADDR + 0x2C04)
@@ -1942,57 +1477,111 @@
 #define CE_RNG			ECREG(EC_REG_BASE_ADDR + 0x3C20)
 
 
+/* Shared Memory Flash Interface Bridge (SMFI) registers */
+
+#ifndef __ASSEMBLER__
+struct flash_it8xxx2_regs {
+	volatile uint8_t reserved1[59];
+	/* 0x3B: EC-Indirect memory address 0 */
+	volatile uint8_t SMFI_ECINDAR0;
+	/* 0x3C: EC-Indirect memory address 1 */
+	volatile uint8_t SMFI_ECINDAR1;
+	/* 0x3D: EC-Indirect memory address 2 */
+	volatile uint8_t SMFI_ECINDAR2;
+	/* 0x3E: EC-Indirect memory address 3 */
+	volatile uint8_t SMFI_ECINDAR3;
+	/* 0x3F: EC-Indirect memory data */
+	volatile uint8_t SMFI_ECINDDR;
+	/* 0x40: Scratch SRAM 0 address low byte */
+	volatile uint8_t SMFI_SCAR0L;
+	/* 0x41: Scratch SRAM 0 address middle byte */
+	volatile uint8_t SMFI_SCAR0M;
+	/* 0x42: Scratch SRAM 0 address high byte */
+	volatile uint8_t SMFI_SCAR0H;
+	volatile uint8_t reserved2[95];
+	/* 0xA2: Flash control 6 */
+	volatile uint8_t SMFI_FLHCTRL6R;
+};
+#endif /* !__ASSEMBLER__ */
+
+/* SMFI register fields */
+
+/* EC-Indirect read internal flash */
+#define EC_INDIRECT_READ_INTERNAL_FLASH BIT(6)
+/* Enable EC-indirect page program command */
+#define IT8XXX2_SMFI_MASK_ECINDPP BIT(3)
+/* Scratch SRAM 0 address(BIT(19)) */
+#define IT8XXX2_SMFI_SC0A19 BIT(7)
+/* Scratch SRAM enable */
+#define IT8XXX2_SMFI_SCAR0H_ENABLE BIT(3)
+
+/* --- GPIO --- */
+#define IT8XXX2_GPIO_BASE  0x00F01600
+#define IT8XXX2_GPIO2_BASE 0x00F03E00
+
+/* TODO: create interface for accessing GPIO general control registers. */
+#define IT8XXX2_GPIO_GCR        ECREG(IT8XXX2_GPIO_BASE + 0x00)
+#define IT8XXX2_GPIO_GCR_ESPI_RST_D2      0x2
+#define IT8XXX2_GPIO_GCR_ESPI_RST_POS     1
+#define IT8XXX2_GPIO_GCR_ESPI_RST_EN_MASK (0x3 << IT8XXX2_GPIO_GCR_ESPI_RST_POS)
+
+#define IT8XXX2_GPIO_GCRX(offset) ECREG(IT8XXX2_GPIO_BASE + (offset))
+#define IT8XXX2_GPIO_GCR25_OFFSET 0xd1
+#define IT8XXX2_GPIO_GCR26_OFFSET 0xd2
+#define IT8XXX2_GPIO_GCR27_OFFSET 0xd3
+#define IT8XXX2_GPIO_GCR28_OFFSET 0xd4
+#define IT8XXX2_GPIO_GCR31_OFFSET 0xd5
+#define IT8XXX2_GPIO_GCR32_OFFSET 0xd6
+#define IT8XXX2_GPIO_GCR33_OFFSET 0xd7
+#define IT8XXX2_GPIO_GCR19_OFFSET 0xe4
+#define IT8XXX2_GPIO_GCR20_OFFSET 0xe5
+#define IT8XXX2_GPIO_GCR21_OFFSET 0xe6
+#define IT8XXX2_GPIO_GCR22_OFFSET 0xe7
+#define IT8XXX2_GPIO_GCR23_OFFSET 0xe8
+#define IT8XXX2_GPIO_GCR24_OFFSET 0xe9
+#define IT8XXX2_GPIO_GCR30_OFFSET 0xed
+#define IT8XXX2_GPIO_GCR29_OFFSET 0xee
+/* TODO: correct GRCx to GCRx */
+#define IT8XXX2_GPIO_GRC1       ECREG(IT8XXX2_GPIO_BASE + 0xF0)
+#define IT8XXX2_GPIO_GRC21      ECREG(IT8XXX2_GPIO_BASE + 0xE6)
+
+#define IT8XXX2_GPIO_GPCRP0     ECREG(IT8XXX2_GPIO2_BASE + 0x18)
+#define IT8XXX2_GPIO_GPCRP1     ECREG(IT8XXX2_GPIO2_BASE + 0x19)
 
 /* Analog to Digital Converter (ADC) */
-#define IT83XX_ADC_BASE   0x00f01900
 
-#define IT83XX_ADC_ADCSTS       ECREG(IT83XX_ADC_BASE + 0x00)
-#define IT83XX_ADC_ADCCTS1			BIT(7)
-#define IT83XX_ADC_AINITB			BIT(3)
-#define IT83XX_ADC_ADCCFG       ECREG(IT83XX_ADC_BASE + 0x01)
-#define IT83XX_ADC_ADCCTS0			BIT(5)
-#define IT83XX_ADC_ADCEN			BIT(0)
-#define IT83XX_ADC_ADCCTL       ECREG(IT83XX_ADC_BASE + 0x02)
-#define IT83XX_ADC_ADCGCR       ECREG(IT83XX_ADC_BASE + 0x03)
-#define IT83XX_ADC_VCH0CTL      ECREG(IT83XX_ADC_BASE + 0x04)
+#ifndef __ASSEMBLER__
+struct adc_it8xxx2_regs {
+	volatile uint8_t ADCSTS;
+	volatile uint8_t ADCCFG;
+	volatile uint8_t ADCCTL;
+	volatile uint8_t ADCGCR;
+	volatile uint8_t VCH0CTL;
+	volatile uint8_t KDCTL;
+	volatile uint8_t reserved1[18];
+	volatile uint8_t VCH0DATL;
+	volatile uint8_t VCH0DATM;
+	volatile uint8_t reserved2[42];
+	volatile uint8_t ADCDVSTS;
+};
+#endif /* !__ASSEMBLER__ */
+
+/* ADC conversion time select 1 */
+#define IT8XXX2_ADC_ADCCTS1			BIT(7)
+/* Analog accuracy initialization */
+#define IT8XXX2_ADC_AINITB			BIT(3)
+/* ADC conversion time select 0 */
+#define IT8XXX2_ADC_ADCCTS0			BIT(5)
+/* ADC module enable */
+#define IT8XXX2_ADC_ADCEN			BIT(0)
+/* ADC data buffer keep enable */
+#define IT8XXX2_ADC_DBKEN			BIT(7)
 /* W/C data valid flag */
-#define IT83XX_ADC_DATVAL			BIT(7)
-/* Data valid interrupt of adc. */
-#define IT83XX_ADC_INTDVEN			BIT(5)
-#define IT83XX_ADC_KDCTL        ECREG(IT83XX_ADC_BASE + 0x05)
-#define IT83XX_ADC_AHCE				BIT(7)
-#define IT83XX_ADC_VCH1CTL      ECREG(IT83XX_ADC_BASE + 0x06)
-#define IT83XX_ADC_VCH1DATL     ECREG(IT83XX_ADC_BASE + 0x07)
-#define IT83XX_ADC_VCH1DATM     ECREG(IT83XX_ADC_BASE + 0x08)
-#define IT83XX_ADC_VCH2CTL      ECREG(IT83XX_ADC_BASE + 0x09)
-#define IT83XX_ADC_VCH2DATL     ECREG(IT83XX_ADC_BASE + 0x0A)
-#define IT83XX_ADC_VCH2DATM     ECREG(IT83XX_ADC_BASE + 0x0B)
-#define IT83XX_ADC_VCH3CTL      ECREG(IT83XX_ADC_BASE + 0x0C)
-#define IT83XX_ADC_VCH3DATL     ECREG(IT83XX_ADC_BASE + 0x0D)
-#define IT83XX_ADC_VCH3DATM     ECREG(IT83XX_ADC_BASE + 0x0E)
-#define IT83XX_ADC_VHSCDBL      ECREG(IT83XX_ADC_BASE + 0x14)
-#define IT83XX_ADC_VHSCDBM      ECREG(IT83XX_ADC_BASE + 0x15)
-#define IT83XX_ADC_VCH0DATL     ECREG(IT83XX_ADC_BASE + 0x18)
-#define IT83XX_ADC_VCH0DATM     ECREG(IT83XX_ADC_BASE + 0x19)
-#define IT83XX_ADC_VHSGCDBL     ECREG(IT83XX_ADC_BASE + 0x1C)
-#define IT83XX_ADC_VHSGCDBM     ECREG(IT83XX_ADC_BASE + 0x1D)
-#define IT83XX_ADC_ADCSAR       ECREG(IT83XX_ADC_BASE + 0x32)
-#define IT83XX_ADC_VCMPSCP      ECREG(IT83XX_ADC_BASE + 0x37)
-#define IT83XX_ADC_VCH4CTL      ECREG(IT83XX_ADC_BASE + 0x38)
-/* Voltage channel enable (ch4~ch7) */
-#define IT83XX_ADC_VCHEN			BIT(4)
-#define IT83XX_ADC_VCH4DATM     ECREG(IT83XX_ADC_BASE + 0x39)
-#define IT83XX_ADC_VCH4DATL     ECREG(IT83XX_ADC_BASE + 0x3A)
-#define IT83XX_ADC_VCH5CTL      ECREG(IT83XX_ADC_BASE + 0x3B)
-#define IT83XX_ADC_VCH5DATM     ECREG(IT83XX_ADC_BASE + 0x3C)
-#define IT83XX_ADC_VCH5DATL     ECREG(IT83XX_ADC_BASE + 0x3D)
-#define IT83XX_ADC_VCH6CTL      ECREG(IT83XX_ADC_BASE + 0x3E)
-#define IT83XX_ADC_VCH6DATM     ECREG(IT83XX_ADC_BASE + 0x3F)
-#define IT83XX_ADC_VCH6DATL     ECREG(IT83XX_ADC_BASE + 0x40)
-#define IT83XX_ADC_VCH7CTL      ECREG(IT83XX_ADC_BASE + 0x41)
-#define IT83XX_ADC_VCH7DATM     ECREG(IT83XX_ADC_BASE + 0x42)
-#define IT83XX_ADC_VCH7DATL     ECREG(IT83XX_ADC_BASE + 0x43)
-#define IT83XX_ADC_ADCDVSTS     ECREG(IT83XX_ADC_BASE + 0x44)
+#define IT8XXX2_ADC_DATVAL			BIT(7)
+/* Data valid interrupt of adc */
+#define IT8XXX2_ADC_INTDVEN			BIT(5)
+/* Automatic hardware calibration enable */
+#define IT8XXX2_ADC_AHCE			BIT(7)
 
 /*
  * Clock and Power Management (ECPM)
@@ -2007,6 +1596,25 @@
 #define CGC_OFFSET_SMBC		((IT83XX_ECPM_CGCTRL4R_OFF << 8) | 0x10)
 #define CGC_OFFSET_SMBB		((IT83XX_ECPM_CGCTRL4R_OFF << 8) | 0x08)
 #define CGC_OFFSET_SMBA		((IT83XX_ECPM_CGCTRL4R_OFF << 8) | 0x04)
+
+/* TODO: rename IT83XX_ECPM_BASE to IT8XXX2_ECPM_BASE */
+#define IT8XXX2_ECPM_PLLCTRL    ECREG(IT83XX_ECPM_BASE + 0x03)
+#ifndef __ASSEMBLER__
+enum chip_pll_mode {
+	CHIP_PLL_DOZE = 0,
+	CHIP_PLL_SLEEP = 1,
+	CHIP_PLL_DEEP_DOZE = 3,
+};
+#endif
+#define IT8XXX2_ECPM_AUTOCG     ECREG(IT83XX_ECPM_BASE + 0x04)
+#define IT8XXX2_ECPM_CGCTRL3R   ECREG(IT83XX_ECPM_BASE + 0x05)
+#define IT8XXX2_ECPM_PLLFREQR   ECREG(IT83XX_ECPM_BASE + 0x06)
+#define IT8XXX2_ECPM_PLLCSS     ECREG(IT83XX_ECPM_BASE + 0x08)
+#define IT8XXX2_ECPM_SCDCR0     ECREG(IT83XX_ECPM_BASE + 0x0c)
+#define IT8XXX2_ECPM_SCDCR1     ECREG(IT83XX_ECPM_BASE + 0x0d)
+#define IT8XXX2_ECPM_SCDCR2     ECREG(IT83XX_ECPM_BASE + 0x0e)
+#define IT8XXX2_ECPM_SCDCR3     ECREG(IT83XX_ECPM_BASE + 0x0f)
+#define IT8XXX2_ECPM_SCDCR4     ECREG(IT83XX_ECPM_BASE + 0x10)
 
 /*
  * The count number of the counter for 25 ms register.
@@ -2072,6 +1680,643 @@
 /* --- General Control (GCTRL) --- */
 #define IT83XX_GCTRL_BASE 0x00F02000
 
-#define IT83XX_GCTRL_WNCKR        ECREG(IT83XX_GCTRL_BASE + 0x0B)
+#ifdef IT83XX_CHIP_ID_3BYTES
+#define IT83XX_GCTRL_CHIPID1         ECREG(IT83XX_GCTRL_BASE + 0x85)
+#define IT83XX_GCTRL_CHIPID2         ECREG(IT83XX_GCTRL_BASE + 0x86)
+#define IT83XX_GCTRL_CHIPID3         ECREG(IT83XX_GCTRL_BASE + 0x87)
+#else
+#define IT83XX_GCTRL_CHIPID1         ECREG(IT83XX_GCTRL_BASE + 0x00)
+#define IT83XX_GCTRL_CHIPID2         ECREG(IT83XX_GCTRL_BASE + 0x01)
+#endif
+#define IT83XX_GCTRL_CHIPVER         ECREG(IT83XX_GCTRL_BASE + 0x02)
+#define IT83XX_GCTRL_DBGROS          ECREG(IT83XX_GCTRL_BASE + 0x03)
+#define IT83XX_SMB_DBGR                    BIT(0)
+
+/*
+ * Writing 00h to this register and the CPU program counter will be paused
+ * until the next low to high transition of the 65.536 clock.
+ */
+#define IT83XX_GCTRL_WNCKR           ECREG(IT83XX_GCTRL_BASE + 0x0B)
+#define IT83XX_GCTRL_RSTS            ECREG(IT83XX_GCTRL_BASE + 0x06)
+#define IT83XX_GCTRL_BADRSEL         ECREG(IT83XX_GCTRL_BASE + 0x0A)
+#define IT83XX_GCTRL_SPCTRL1         ECREG(IT83XX_GCTRL_BASE + 0x0D)
+#define IT83XX_GCTRL_RSTDMMC         ECREG(IT83XX_GCTRL_BASE + 0x10)
+#define IT83XX_GCTRL_RSTC4           ECREG(IT83XX_GCTRL_BASE + 0x11)
+#define IT83XX_GCTRL_SPCTRL4         ECREG(IT83XX_GCTRL_BASE + 0x1C)
+#define IT83XX_GCTRL_MCCR3           ECREG(IT83XX_GCTRL_BASE + 0x20)
+#define IT83XX_GCTRL_SPISLVPFE             BIT(6)
+#define IT83XX_GCTRL_RSTC5           ECREG(IT83XX_GCTRL_BASE + 0x21)
+#define IT83XX_GCTRL_MCCR            ECREG(IT83XX_GCTRL_BASE + 0x30)
+#define IT83XX_GCTRL_ICACHE_RESET          BIT(4)
+#define IT83XX_GCTRL_PMER1           ECREG(IT83XX_GCTRL_BASE + 0x32)
+#define IT83XX_GCTRL_PMER2           ECREG(IT83XX_GCTRL_BASE + 0x33)
+#define IT83XX_GCTRL_EPLR            ECREG(IT83XX_GCTRL_BASE + 0x37)
+#define IT83XX_GCTRL_EPLR_ENABLE           BIT(0)
+#define IT83XX_GCTRL_IVTBAR          ECREG(IT83XX_GCTRL_BASE + 0x41)
+#define IT83XX_GCTRL_MCCR2           ECREG(IT83XX_GCTRL_BASE + 0x44)
+#define IT83XX_GCTRL_PIN_MUX0        ECREG(IT83XX_GCTRL_BASE + 0x46)
+#define IT83XX_DLM14_ENABLE                BIT(5)
+#define IT83XX_GCTRL_SSCR            ECREG(IT83XX_GCTRL_BASE + 0x4A)
+#define IT83XX_GCTRL_ETWDUARTCR      ECREG(IT83XX_GCTRL_BASE + 0x4B)
+#define IT83XX_GCTRL_WMCR            ECREG(IT83XX_GCTRL_BASE + 0x4C)
+#define IT83XX_GCTRL_H2ROFSR         ECREG(IT83XX_GCTRL_BASE + 0x53)
+/* bit[0] = 0 or 1 : disable or enable ETWD hardware reset */
+#define ETWD_HW_RST_EN                     BIT(0)
+#define IT83XX_GCTRL_RVILMCR0        ECREG(IT83XX_GCTRL_BASE + 0x5D)
+#define ILMCR_ILM0_ENABLE                  BIT(0)
+#define ILMCR_ILM2_ENABLE                  BIT(2)
+#define IT83XX_GCTRL_EWPR0PFH(i)     ECREG(IT83XX_GCTRL_BASE + 0x60 + i)
+#define IT83XX_GCTRL_EWPR0PFD(i)     ECREG(IT83XX_GCTRL_BASE + 0xA0 + i)
+#define IT83XX_GCTRL_EWPR0PFEC(i)    ECREG(IT83XX_GCTRL_BASE + 0xC0 + i)
+
+/* Serial Peripheral Interface (SPI) */
+#define IT83XX_SPI_BASE  0x00F03A00
+
+#define IT83XX_SPI_SPISGCR           ECREG(IT83XX_SPI_BASE + 0x00)
+#define IT83XX_SPI_SPISCEN                 BIT(0)
+#define IT83XX_SPI_TXRXFAR           ECREG(IT83XX_SPI_BASE + 0x01)
+#define IT83XX_SPI_CPURXF2A                BIT(4)
+#define IT83XX_SPI_CPURXF1A                BIT(3)
+#define IT83XX_SPI_CPUTFA                  BIT(1)
+#define IT83XX_SPI_TXFCR             ECREG(IT83XX_SPI_BASE + 0x02)
+#define IT83XX_SPI_TXFCMR                  BIT(2)
+#define IT83XX_SPI_TXFR                    BIT(1)
+#define IT83XX_SPI_TXFS                    BIT(0)
+#define IT83XX_SPI_GCR2              ECREG(IT83XX_SPI_BASE + 0x03)
+#define IT83XX_SPI_RXF2OC                  BIT(4)
+#define IT83XX_SPI_RXF1OC                  BIT(3)
+#define IT83XX_SPI_RXFAR                   BIT(0)
+#define IT83XX_SPI_IMR               ECREG(IT83XX_SPI_BASE + 0x04)
+#define IT83XX_SPI_RX_FIFO_FULL            BIT(7)
+#define IT83XX_SPI_RX_REACH                BIT(5)
+#define IT83XX_SPI_EDIM                    BIT(2)
+#define IT83XX_SPI_ISR               ECREG(IT83XX_SPI_BASE + 0x05)
+#define IT83XX_SPI_TXFSR             ECREG(IT83XX_SPI_BASE + 0x06)
+#define IT83XX_SPI_ENDDETECTINT            BIT(2)
+#define IT83XX_SPI_RXFSR             ECREG(IT83XX_SPI_BASE + 0x07)
+#define IT83XX_SPI_RXFFSM                  (BIT(4) | BIT(3))
+#define IT83XX_SPI_RXF2FS                  BIT(2)
+#define IT83XX_SPI_RXF1FS                  BIT(1)
+#ifdef CHIP_VARIANT_IT83202BX
+#define IT83XX_SPI_SPISRDR           ECREG(IT83XX_SPI_BASE + 0x08)
+#else
+#define IT83XX_SPI_SPISRDR           ECREG(IT83XX_SPI_BASE + 0x0b)
+#endif
+#define IT83XX_SPI_CPUWTFDB0         ECREG_u32(IT83XX_SPI_BASE + 0x08)
+#define IT83XX_SPI_FCR               ECREG(IT83XX_SPI_BASE + 0x09)
+#define IT83XX_SPI_SPISRTXF                BIT(2)
+#define IT83XX_SPI_RXFR                    BIT(1)
+#define IT83XX_SPI_RXFCMR                  BIT(0)
+#define IT83XX_SPI_RXFRDRB0          ECREG_u32(IT83XX_SPI_BASE + 0x0C)
+#define IT83XX_SPI_FTCB0R            ECREG(IT83XX_SPI_BASE + 0x18)
+#define IT83XX_SPI_FTCB1R            ECREG(IT83XX_SPI_BASE + 0x19)
+#define IT83XX_SPI_TCCB0             ECREG(IT83XX_SPI_BASE + 0x1A)
+#define IT83XX_SPI_TCCB1             ECREG(IT83XX_SPI_BASE + 0x1B)
+#define IT83XX_SPI_HPR2              ECREG(IT83XX_SPI_BASE + 0x1E)
+#define IT83XX_SPI_EMMCBMR           ECREG(IT83XX_SPI_BASE + 0x21)
+#define IT83XX_SPI_EMMCABM                 BIT(1) /* eMMC Alternative Boot Mode */
+#define IT83XX_SPI_RX_VLISMR         ECREG(IT83XX_SPI_BASE + 0x26)
+#define IT83XX_SPI_RVLIM                   BIT(0)
+#define IT83XX_SPI_RX_VLISR          ECREG(IT83XX_SPI_BASE + 0x27)
+#define IT83XX_SPI_RVLI                    BIT(0)
+
+/**
+ *
+ * (20xxh) General Control (GCTRL) registers
+ *
+ */
+#ifndef __ASSEMBLER__
+struct gctrl_it8xxx2_regs {
+	/* 0x00-0x01: Reserved1 */
+	volatile uint8_t reserved1[2];
+	/* 0x02: Chip Version */
+	volatile uint8_t GCTRL_ECHIPVER;
+	/* 0x03-0x05: Reserved2 */
+	volatile uint8_t reserved2[3];
+	/* 0x06: Reset Status */
+	volatile uint8_t GCTRL_RSTS;
+	/* 0x07-0x09: Reserved3 */
+	volatile uint8_t reserved3[3];
+	/* 0x0a: Base Address Select */
+	volatile uint8_t GCTRL_BADRSEL;
+	/* 0x0b: Wait Next Clock Rising */
+	volatile uint8_t GCTRL_WNCKR;
+	/* 0x0c: Reserved3-1 */
+	volatile uint8_t reserved3_1;
+	/* 0x0d: Special Control 1 */
+	volatile uint8_t GCTRL_SPCTRL1;
+	/* 0x0E-0x1B: Reserved3-2 */
+	volatile uint8_t reserved3_2[14];
+	/* 0x1C: Special Control 4 */
+	volatile uint8_t GCTRL_SPCTRL4;
+	/* 0x1D-0x1F: Reserved4 */
+	volatile uint8_t reserved4[3];
+	/* 0x20: Memory Controller Configuration 3 */
+	volatile uint8_t GCTRL_MCCR3;
+	/* 0x21: Reset Control 5 */
+	volatile uint8_t GCTRL_RSTC5;
+	/* 0x22-0x2F: Reserved5 */
+	volatile uint8_t reserved5[14];
+	/* 0x30: Memory Controller Configuration */
+	volatile uint8_t GCTRL_MCCR;
+	/* 0x31: Externel ILM/DLM Size */
+	volatile uint8_t GCTRL_EIDSR;
+	/* 0x32-0x36: Reserved6 */
+	volatile uint8_t reserved6[5];
+	/* 0x37: Eflash Protect Lock */
+	volatile uint8_t GCTRL_EPLR;
+	/* 0x38-0x40: Reserved7 */
+	volatile uint8_t reserved7[9];
+	/* 0x41: Interrupt Vector Table Base Address */
+	volatile uint8_t GCTRL_IVTBAR;
+	/* 0x42-0x43: Reserved8 */
+	volatile uint8_t reserved8[2];
+	/* 0x44: Memory Controller Configuration 2 */
+	volatile uint8_t GCTRL_MCCR2;
+	/* 0x45: Reserved9 */
+	volatile uint8_t reserved9;
+	/* 0x46: Pin Multi-function Enable 3 */
+	volatile uint8_t GCTRL_PMER3;
+	/* 0x47-0x4A: Reserved10 */
+	volatile uint8_t reserved10[4];
+	/* 0x4B: ETWD and UART Control */
+	volatile uint8_t GCTRL_ETWDUARTCR;
+	/* 0x4C: Wakeup MCU Control */
+	volatile uint8_t GCTRL_WMCR;
+	/* 0x4D-0x4F: Reserved11 */
+	volatile uint8_t reserved11[3];
+	/* 0x50: Port 80h/81h Status Register */
+	volatile uint8_t GCTRL_P80H81HSR;
+	/* 0x51: Port 80h Data Register */
+	volatile uint8_t GCTRL_P80HDR;
+	/* 0x52: Port 81h Data Register */
+	volatile uint8_t GCTRL_P81HDR;
+	/* 0x53: H2RAM Offset Register */
+	volatile uint8_t GCTRL_H2ROFSR;
+	/* 0x54-0x84: Reserved11-1 */
+	volatile uint8_t reserved11_1[49];
+	/* 0x85: Chip ID Byte 1 */
+	volatile uint8_t GCTRL_ECHIPID1;
+	/* 0x86: Chip ID Byte 2 */
+	volatile uint8_t GCTRL_ECHIPID2;
+	/* 0x87: Chip ID Byte 3 */
+	volatile uint8_t GCTRL_ECHIPID3;
+};
+#endif /* !__ASSEMBLER__ */
+
+/* GCTRL register fields */
+/* 0x06: Reset Status */
+#define IT8XXX2_GCTRL_LRS		(BIT(1) | BIT(0))
+#define IT8XXX2_GCTRL_IWDTR		BIT(1)
+/* 0x1C: Special Control 4 */
+#define IT8XXX2_GCTRL_LRSIWR		BIT(2)
+#define IT8XXX2_GCTRL_LRSIPWRSWTR	BIT(1)
+#define IT8XXX2_GCTRL_LRSIPGWR		BIT(0)
+/* 0x4B: ETWD and UART Control */
+#define IT8XXX2_GCTRL_ETWD_HW_RST_EN	BIT(0)
+/* Accept Port 80h Cycle */
+#define IT8XXX2_GCTRL_ACP80		BIT(6)
+
+/*
+ * VCC Detector Option.
+ * bit[7-6] = 1: The VCC power status is treated as power-on.
+ * The VCC supply of eSPI and related functions (EC2I, KBC, PMC and
+ * PECI). It means VCC should be logic high before using these
+ * functions, or firmware treats VCC logic high.
+ */
+#define IT8XXX2_GCTRL_VCCDO_MASK	(BIT(6) | BIT(7))
+#define IT8XXX2_GCTRL_VCCDO_VCC_ON	BIT(6)
+/*
+ * bit[3] = 0: The reset source of PNPCFG is RSTPNP bit in RSTCH
+ * register and WRST#.
+ */
+#define IT8XXX2_GCTRL_HGRST		BIT(3)
+/* bit[2] = 1: Enable global reset. */
+#define IT8XXX2_GCTRL_GRST		BIT(2)
+
+#ifndef __ASSEMBLER__
+/*
+ * EC2I bridge registers
+ */
+struct ec2i_regs {
+	/* 0x00: Indirect Host I/O Address Register */
+	volatile uint8_t IHIOA;
+	/* 0x01: Indirect Host Data Register */
+	volatile uint8_t IHD;
+	/* 0x02: Lock Super I/O Host Access Register */
+	volatile uint8_t LSIOHA;
+	/* 0x03: Super I/O Access Lock Violation Register */
+	volatile uint8_t SIOLV;
+	/* 0x04: EC to I-Bus Modules Access Enable Register */
+	volatile uint8_t IBMAE;
+	/* 0x05: I-Bus Control Register */
+	volatile uint8_t IBCTL;
+};
+
+/* Index list of the host interface registers of PNPCFG */
+enum host_pnpcfg_index {
+	/* Logical Device Number */
+	HOST_INDEX_LDN = 0x07,
+	/* Chip ID Byte 1 */
+	HOST_INDEX_CHIPID1 = 0x20,
+	/* Chip ID Byte 2 */
+	HOST_INDEX_CHIPID2 = 0x21,
+	/* Chip Version */
+	HOST_INDEX_CHIPVER = 0x22,
+	/* Super I/O Control */
+	HOST_INDEX_SIOCTRL = 0x23,
+	/* Super I/O IRQ Configuration */
+	HOST_INDEX_SIOIRQ = 0x25,
+	/* Super I/O General Purpose */
+	HOST_INDEX_SIOGP = 0x26,
+	/* Super I/O Power Mode */
+	HOST_INDEX_SIOPWR = 0x2D,
+	/* Depth 2 I/O Address */
+	HOST_INDEX_D2ADR = 0x2E,
+	/* Depth 2 I/O Data */
+	HOST_INDEX_D2DAT = 0x2F,
+	/* Logical Device Activate Register */
+	HOST_INDEX_LDA = 0x30,
+	/* I/O Port Base Address Bits [15:8] for Descriptor 0 */
+	HOST_INDEX_IOBAD0_MSB = 0x60,
+	/* I/O Port Base Address Bits [7:0] for Descriptor 0 */
+	HOST_INDEX_IOBAD0_LSB = 0x61,
+	/* I/O Port Base Address Bits [15:8] for Descriptor 1 */
+	HOST_INDEX_IOBAD1_MSB = 0x62,
+	/* I/O Port Base Address Bits [7:0] for Descriptor 1 */
+	HOST_INDEX_IOBAD1_LSB = 0x63,
+	/* Interrupt Request Number and Wake-Up on IRQ Enabled */
+	HOST_INDEX_IRQNUMX = 0x70,
+	/* Interrupt Request Type Select */
+	HOST_INDEX_IRQTP = 0x71,
+	/* DMA Channel Select 0 */
+	HOST_INDEX_DMAS0 = 0x74,
+	/* DMA Channel Select 1 */
+	HOST_INDEX_DMAS1 = 0x75,
+	/* Device Specific Logical Device Configuration 1 to 10 */
+	HOST_INDEX_DSLDC1 = 0xF0,
+	HOST_INDEX_DSLDC2 = 0xF1,
+	HOST_INDEX_DSLDC3 = 0xF2,
+	HOST_INDEX_DSLDC4 = 0xF3,
+	HOST_INDEX_DSLDC5 = 0xF4,
+	HOST_INDEX_DSLDC6 = 0xF5,
+	HOST_INDEX_DSLDC7 = 0xF6,
+	HOST_INDEX_DSLDC8 = 0xF7,
+	HOST_INDEX_DSLDC9 = 0xF8,
+	HOST_INDEX_DSLDC10 = 0xF9,
+};
+
+/* List of logical device number (LDN) assignments */
+enum logical_device_number {
+	/* Serial Port 1 */
+	LDN_UART1 = 0x01,
+	/* Serial Port 2 */
+	LDN_UART2 = 0x02,
+	/* System Wake-Up Control */
+	LDN_SWUC = 0x04,
+	/* KBC/Mouse Interface */
+	LDN_KBC_MOUSE = 0x05,
+	/* KBC/Keyboard Interface */
+	LDN_KBC_KEYBOARD = 0x06,
+	/* Consumer IR */
+	LDN_CIR = 0x0A,
+	/* Shared Memory/Flash Interface */
+	LDN_SMFI = 0x0F,
+	/* RTC-like Timer */
+	LDN_RTCT = 0x10,
+	/* Power Management I/F Channel 1 */
+	LDN_PMC1 = 0x11,
+	/* Power Management I/F Channel 2 */
+	LDN_PMC2 = 0x12,
+	/* Serial Peripheral Interface */
+	LDN_SSPI = 0x13,
+	/* Platform Environment Control Interface */
+	LDN_PECI = 0x14,
+	/* Power Management I/F Channel 3 */
+	LDN_PMC3 = 0x17,
+	/* Power Management I/F Channel 4 */
+	LDN_PMC4 = 0x18,
+	/* Power Management I/F Channel 5 */
+	LDN_PMC5 = 0x19,
+};
+
+/* Structure for initializing PNPCFG via ec2i. */
+struct ec2i_t {
+	/* index port */
+	enum host_pnpcfg_index index_port;
+	/* data port */
+	uint8_t data_port;
+};
+
+/* EC2I access index/data port */
+enum ec2i_access {
+	/* index port */
+	EC2I_ACCESS_INDEX = 0,
+	/* data port */
+	EC2I_ACCESS_DATA = 1,
+};
+
+/* EC to I-Bus Access Enabled */
+#define EC2I_IBCTL_CSAE  BIT(0)
+/* EC Read from I-Bus */
+#define EC2I_IBCTL_CRIB  BIT(1)
+/* EC Write to I-Bus */
+#define EC2I_IBCTL_CWIB  BIT(2)
+#define EC2I_IBCTL_CRWIB (EC2I_IBCTL_CRIB | EC2I_IBCTL_CWIB)
+
+/* PNPCFG Register EC Access Enable */
+#define EC2I_IBMAE_CFGAE BIT(0)
+
+/*
+ * KBC registers
+ */
+struct kbc_regs {
+	/* 0x00: KBC Host Interface Control Register */
+	volatile uint8_t KBHICR;
+	/* 0x01: Reserved1 */
+	volatile uint8_t reserved1;
+	/* 0x02: KBC Interrupt Control Register */
+	volatile uint8_t KBIRQR;
+	/* 0x03: Reserved2 */
+	volatile uint8_t reserved2;
+	/* 0x04: KBC Host Interface Keyboard/Mouse Status Register */
+	volatile uint8_t KBHISR;
+	/* 0x05: Reserved3 */
+	volatile uint8_t reserved3;
+	/* 0x06: KBC Host Interface Keyboard Data Output Register */
+	volatile uint8_t KBHIKDOR;
+	/* 0x07: Reserved4 */
+	volatile uint8_t reserved4;
+	/* 0x08: KBC Host Interface Mouse Data Output Register */
+	volatile uint8_t KBHIMDOR;
+	/* 0x09: Reserved5 */
+	volatile uint8_t reserved5;
+	/* 0x0a: KBC Host Interface Keyboard/Mouse Data Input Register */
+	volatile uint8_t KBHIDIR;
+};
+
+/* Output Buffer Full */
+#define KBC_KBHISR_OBF      BIT(0)
+/* Input Buffer Full */
+#define KBC_KBHISR_IBF      BIT(1)
+/* A2 Address (A2) */
+#define KBC_KBHISR_A2_ADDR  BIT(3)
+#define KBC_KBHISR_STS_MASK (KBC_KBHISR_OBF | KBC_KBHISR_IBF \
+						| KBC_KBHISR_A2_ADDR)
+
+/* Clear Output Buffer Full */
+#define KBC_KBHICR_COBF      BIT(6)
+/* IBF/OBF Clear Mode Enable */
+#define KBC_KBHICR_IBFOBFCME BIT(5)
+/* Input Buffer Full CPU Interrupt Enable */
+#define KBC_KBHICR_IBFCIE    BIT(3)
+/* Output Buffer Empty CPU Interrupt Enable */
+#define KBC_KBHICR_OBECIE    BIT(2)
+/* Output Buffer Full Mouse Interrupt Enable */
+#define KBC_KBHICR_OBFMIE    BIT(1)
+/* Output Buffer Full Keyboard Interrupt Enable */
+#define KBC_KBHICR_OBFKIE    BIT(0)
+
+/*
+ * PMC registers
+ */
+struct pmc_regs {
+	/* 0x00: Host Interface PM Channel 1 Status */
+	volatile uint8_t PM1STS;
+	/* 0x01: Host Interface PM Channel 1 Data Out Port */
+	volatile uint8_t PM1DO;
+	/* 0x02: Host Interface PM Channel 1 Data Out Port with SCI# */
+	volatile uint8_t PM1DOSCI;
+	/* 0x03: Host Interface PM Channel 1 Data Out Port with SMI# */
+	volatile uint8_t PM1DOSMI;
+	/* 0x04: Host Interface PM Channel 1 Data In Port */
+	volatile uint8_t PM1DI;
+	/* 0x05: Host Interface PM Channel 1 Data In Port with SCI# */
+	volatile uint8_t PM1DISCI;
+	/* 0x06: Host Interface PM Channel 1 Control */
+	volatile uint8_t PM1CTL;
+	/* 0x07: Host Interface PM Channel 1 Interrupt Control */
+	volatile uint8_t PM1IC;
+	/* 0x08: Host Interface PM Channel 1 Interrupt Enable */
+	volatile uint8_t PM1IE;
+	/* 0x09-0x0f: Reserved1 */
+	volatile uint8_t reserved1[7];
+	/* 0x10-0xff: Reserved2 */
+	volatile uint8_t reserved2[0xf0];
+};
+
+/* Input Buffer Full Interrupt Enable */
+#define PMC_PM1CTL_IBFIE    BIT(0)
+/* Output Buffer Full */
+#define PMC_PM1STS_OBF      BIT(0)
+/* Input Buffer Full */
+#define PMC_PM1STS_IBF      BIT(1)
+/* General Purpose Flag */
+#define PMC_PM1STS_GPF      BIT(2)
+/* A2 Address (A2) */
+#define PMC_PM1STS_A2_ADDR  BIT(3)
+
+/*
+ * eSPI slave registers
+ */
+struct espi_slave_regs {
+	/* 0x00-0x03: Reserved1 */
+	volatile uint8_t reserved1[4];
+
+	/* 0x04: General Capabilities and Configuration 0 */
+	volatile uint8_t GCAPCFG0;
+	/* 0x05: General Capabilities and Configuration 1 */
+	volatile uint8_t GCAPCFG1;
+	/* 0x06: General Capabilities and Configuration 2 */
+	volatile uint8_t GCAPCFG2;
+	/* 0x07: General Capabilities and Configuration 3 */
+	volatile uint8_t GCAPCFG3;
+
+	/* Channel 0 (Peripheral Channel) Capabilities and Configurations */
+	/* 0x08: Channel 0 Capabilities and Configuration 0 */
+	volatile uint8_t CH_PC_CAPCFG0;
+	/* 0x09: Channel 0 Capabilities and Configuration 1 */
+	volatile uint8_t CH_PC_CAPCFG1;
+	/* 0x0A: Channel 0 Capabilities and Configuration 2 */
+	volatile uint8_t CH_PC_CAPCFG2;
+	/* 0x0B: Channel 0 Capabilities and Configuration 3 */
+	volatile uint8_t CH_PC_CAPCFG3;
+
+	/* Channel 1 (Virtual Wire Channel) Capabilities and Configurations */
+	/* 0x0C: Channel 1 Capabilities and Configuration 0 */
+	volatile uint8_t CH_VW_CAPCFG0;
+	/* 0x0D: Channel 1 Capabilities and Configuration 1 */
+	volatile uint8_t CH_VW_CAPCFG1;
+	/* 0x0E: Channel 1 Capabilities and Configuration 2 */
+	volatile uint8_t CH_VW_CAPCFG2;
+	/* 0x0F: Channel 1 Capabilities and Configuration 3 */
+	volatile uint8_t CH_VW_CAPCFG3;
+
+	/* Channel 2 (OOB Message Channel) Capabilities and Configurations */
+	/* 0x10: Channel 2 Capabilities and Configuration 0 */
+	volatile uint8_t CH_OOB_CAPCFG0;
+	/* 0x11: Channel 2 Capabilities and Configuration 1 */
+	volatile uint8_t CH_OOB_CAPCFG1;
+	/* 0x12: Channel 2 Capabilities and Configuration 2 */
+	volatile uint8_t CH_OOB_CAPCFG2;
+	/* 0x13: Channel 2 Capabilities and Configuration 3 */
+	volatile uint8_t CH_OOB_CAPCFG3;
+
+	/* Channel 3 (Flash Access Channel) Capabilities and Configurations */
+	/* 0x14: Channel 3 Capabilities and Configuration 0 */
+	volatile uint8_t CH_FLASH_CAPCFG0;
+	/* 0x15: Channel 3 Capabilities and Configuration 1 */
+	volatile uint8_t CH_FLASH_CAPCFG1;
+	/* 0x16: Channel 3 Capabilities and Configuration 2 */
+	volatile uint8_t CH_FLASH_CAPCFG2;
+	/* 0x17: Channel 3 Capabilities and Configuration 3 */
+	volatile uint8_t CH_FLASH_CAPCFG3;
+	/* Channel 3 Capabilities and Configurations 2 */
+	/* 0x18: Channel 3 Capabilities and Configuration 2-0 */
+	volatile uint8_t CH_FLASH_CAPCFG2_0;
+	/* 0x19: Channel 3 Capabilities and Configuration 2-1 */
+	volatile uint8_t CH_FLASH_CAPCFG2_1;
+	/* 0x1A: Channel 3 Capabilities and Configuration 2-2 */
+	volatile uint8_t CH_FLASH_CAPCFG2_2;
+	/* 0x1B: Channel 3 Capabilities and Configuration 2-3 */
+	volatile uint8_t CH_FLASH_CAPCFG2_3;
+
+	/* 0x1c-0x1f: Reserved2 */
+	volatile uint8_t reserved2[4];
+	/* 0x20-0x8f: Reserved3 */
+	volatile uint8_t reserved3[0x70];
+
+	/* 0x90: eSPI PC Control 0 */
+	volatile uint8_t ESPCTRL0;
+	/* 0x91: eSPI PC Control 1 */
+	volatile uint8_t ESPCTRL1;
+	/* 0x92: eSPI PC Control 2 */
+	volatile uint8_t ESPCTRL2;
+	/* 0x93: eSPI PC Control 3 */
+	volatile uint8_t ESPCTRL3;
+	/* 0x94: eSPI PC Control 4 */
+	volatile uint8_t ESPCTRL4;
+	/* 0x95: eSPI PC Control 5 */
+	volatile uint8_t ESPCTRL5;
+	/* 0x96: eSPI PC Control 6 */
+	volatile uint8_t ESPCTRL6;
+	/* 0x97: eSPI PC Control 7 */
+	volatile uint8_t ESPCTRL7;
+	/* 0x98-0x9f: Reserved4 */
+	volatile uint8_t reserved4[8];
+
+	/* 0xa0: eSPI General Control 0 */
+	volatile uint8_t ESGCTRL0;
+	/* 0xa1: eSPI General Control 1 */
+	volatile uint8_t ESGCTRL1;
+	/* 0xa2: eSPI General Control 2 */
+	volatile uint8_t ESGCTRL2;
+	/* 0xa3: eSPI General Control 3 */
+	volatile uint8_t ESGCTRL3;
+	/* 0xa4-0xaf: Reserved5 */
+	volatile uint8_t reserved5[12];
+
+	/* 0xb0: eSPI Upstream Control 0 */
+	volatile uint8_t ESUCTRL0;
+	/* 0xb1: eSPI Upstream Control 1 */
+	volatile uint8_t ESUCTRL1;
+	/* 0xb2: eSPI Upstream Control 2 */
+	volatile uint8_t ESUCTRL2;
+	/* 0xb3: eSPI Upstream Control 3 */
+	volatile uint8_t ESUCTRL3;
+	/* 0xb4-0xb5: Reserved6 */
+	volatile uint8_t reserved6[2];
+	/* 0xb6: eSPI Upstream Control 6 */
+	volatile uint8_t ESUCTRL6;
+	/* 0xb7: eSPI Upstream Control 7 */
+	volatile uint8_t ESUCTRL7;
+	/* 0xb8: eSPI Upstream Control 8 */
+	volatile uint8_t ESUCTRL8;
+	/* 0xb9-0xbf: Reserved7 */
+	volatile uint8_t reserved7[7];
+
+	/* 0xc0: eSPI OOB Control 0 */
+	volatile uint8_t ESOCTRL0;
+	/* 0xc1: eSPI OOB Control 1 */
+	volatile uint8_t ESOCTRL1;
+	/* 0xc2-0xc3: Reserved8 */
+	volatile uint8_t reserved8[2];
+	/* 0xc4: eSPI OOB Control 4 */
+	volatile uint8_t ESOCTRL4;
+	/* 0xc5-0xcf: Reserved9 */
+	volatile uint8_t reserved9[11];
+
+	/* 0xd0: eSPI SAFS Control 0 */
+	volatile uint8_t ESPISAFSC0;
+	/* 0xd1: eSPI SAFS Control 1 */
+	volatile uint8_t ESPISAFSC1;
+	/* 0xd2: eSPI SAFS Control 2 */
+	volatile uint8_t ESPISAFSC2;
+	/* 0xd3: eSPI SAFS Control 3 */
+	volatile uint8_t ESPISAFSC3;
+	/* 0xd4: eSPI SAFS Control 4 */
+	volatile uint8_t ESPISAFSC4;
+	/* 0xd5: eSPI SAFS Control 5 */
+	volatile uint8_t ESPISAFSC5;
+	/* 0xd6: eSPI SAFS Control 6 */
+	volatile uint8_t ESPISAFSC6;
+	/* 0xd7: eSPI SAFS Control 7 */
+	volatile uint8_t ESPISAFSC7;
+};
+
+/*
+ * eSPI VW registers
+ */
+struct espi_vw_regs {
+	/* 0x00-0x7f: VW index */
+	volatile uint8_t VW_INDEX[0x80];
+	/* 0x80-0x8f: Reserved1 */
+	volatile uint8_t reserved1[0x10];
+	/* 0x90: VW Contrl 0 */
+	volatile uint8_t VWCTRL0;
+	/* 0x91: VW Contrl 1 */
+	volatile uint8_t VWCTRL1;
+	/* 0x92: VW Contrl 2 */
+	volatile uint8_t VWCTRL2;
+	/* 0x93: VW Contrl 3 */
+	volatile uint8_t VWCTRL3;
+	/* 0x94: Reserved2 */
+	volatile uint8_t reserved2;
+	/* 0x95: VW Contrl 5 */
+	volatile uint8_t VWCTRL5;
+	/* 0x96: VW Contrl 6 */
+	volatile uint8_t VWCTRL6;
+	/* 0x97: VW Contrl 7 */
+	volatile uint8_t VWCTRL7;
+	/* 0x98-0x99: Reserved3 */
+	volatile uint8_t reserved3[2];
+};
+
+#define ESPI_IT8XXX2_OOB_MAX_PAYLOAD_SIZE 80
+/*
+ * eSPI Queue 0 registers
+ */
+struct espi_queue0_regs {
+	/* 0x00-0x3f: PUT_PC Data Byte 0-63 */
+	volatile uint8_t PUT_PC_DATA[0x40];
+	/* 0x40-0x7f: Reserved1 */
+	volatile uint8_t reserved1[0x40];
+	/* 0x80-0xcf: PUT_OOB Data Byte 0-79 */
+	volatile uint8_t PUT_OOB_DATA[ESPI_IT8XXX2_OOB_MAX_PAYLOAD_SIZE];
+};
+
+/*
+ * eSPI Queue 1 registers
+ */
+struct espi_queue1_regs {
+	/* 0x00-0x4f: Upstream Data Byte 0-79 */
+	volatile uint8_t UPSTREAM_DATA[ESPI_IT8XXX2_OOB_MAX_PAYLOAD_SIZE];
+	/* 0x50-0x7f: Reserved1 */
+	volatile uint8_t reserved1[0x30];
+	/* 0x80-0xbf: PUT_FLASH_NP Data Byte 0-63 */
+	volatile uint8_t PUT_FLASH_NP_DATA[0x40];
+};
+
+#endif /* !__ASSEMBLER__ */
 
 #endif /* CHIP_CHIPREGS_H */

@@ -3,30 +3,55 @@
 # kernel is a normal CMake library and not a zephyr_library because it
 # should not be --whole-archive'd
 
+# If a pre-built static library containing kernel code exists in
+# this directory, libkernel.a, link it with the application code
+# instead of building from source.
+zephyr_library_get_current_dir_lib_name(${ZEPHYR_BASE} libkernel_stem)
+set(libkernel ${CMAKE_CURRENT_SOURCE_DIR}/lib${libkernel_stem}${CMAKE_STATIC_LIBRARY_SUFFIX})
+unset(libkernel_stem)
+
+if(EXISTS ${libkernel})
+
+add_library(kernel INTERFACE)
+target_link_libraries(kernel INTERFACE ${libkernel})
+
+else()
+
 list(APPEND kernel_files
+  main_weak.c
+  banner.c
   device.c
   errno.c
   fatal.c
-  idle.c
   init.c
   kheap.c
-  mailbox.c
   mem_slab.c
+  thread.c
+  version.c
+  )
+
+if(CONFIG_MULTITHREADING)
+list(APPEND kernel_files
+  idle.c
+  mailbox.c
   msg_q.c
   mutex.c
   pipes.c
   queue.c
-  sched.c
   sem.c
   stack.c
   system_work_q.c
-  thread.c
-  version.c
-  condvar.c
   work.c
-  smp.c
-  banner.c
+  sched.c
+  condvar.c
   )
+
+if(CONFIG_SMP)
+list(APPEND kernel_files
+     smp.c)
+endif()
+
+endif()
 
 if(CONFIG_XIP)
 list(APPEND kernel_files
@@ -55,14 +80,12 @@ target_sources_ifdef(CONFIG_SYS_CLOCK_EXISTS      kernel PRIVATE timeout.c timer
 target_sources_ifdef(CONFIG_ATOMIC_OPERATIONS_C   kernel PRIVATE atomic_c.c)
 target_sources_ifdef(CONFIG_MMU                   kernel PRIVATE mmu.c)
 target_sources_ifdef(CONFIG_POLL                  kernel PRIVATE poll.c)
+target_sources_ifdef(CONFIG_EVENTS                kernel PRIVATE events.c)
 
 if(${CONFIG_KERNEL_MEM_POOL})
   target_sources(kernel PRIVATE mempool.c)
 endif()
 
-if(NOT CONFIG_MULTITHREADING)
-  message(WARNING "Single threaded mode (CONFIG_MULTITHREADING=n) is deprecated")
-endif()
 
 # The last 2 files inside the target_sources_ifdef should be
 # userspace_handler.c and userspace.c. If not the linker would complain.
@@ -73,16 +96,23 @@ target_sources_ifdef(
   kernel PRIVATE
   futex.c
   mem_domain.c
-  cache_handlers.c
   userspace_handler.c
   userspace.c
   )
+
+if(CONFIG_CACHE_MANAGEMENT AND CONFIG_USERSPACE)
+  target_sources(kernel PRIVATE cache_handlers.c)
+endif()
 
 target_include_directories(kernel PRIVATE
   ${ZEPHYR_BASE}/kernel/include
   ${ARCH_DIR}/${ARCH}/include
   )
 
+target_link_libraries(kernel zephyr_interface)
+
+endif()
+
 add_dependencies(kernel zephyr_generated_headers)
 
-target_link_libraries(kernel zephyr_interface)
+unset(libkernel)

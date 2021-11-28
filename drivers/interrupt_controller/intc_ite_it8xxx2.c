@@ -13,24 +13,26 @@
 
 #define MAX_REGISR_IRQ_NUM		8
 #define IVECT_OFFSET_WITH_IRQ		0x10
-#define SOFT_INTC_IRQ			161	/* software interrupt */
 
-static volatile uint8_t *const reg_status[MAX_ISR_REG_NUM] = {
+/* Interrupt number of INTC module */
+static uint8_t intc_irq;
+
+static volatile uint8_t *const reg_status[] = {
 	&ISR0, &ISR1, &ISR2, &ISR3,
 	&ISR4, &ISR5, &ISR6, &ISR7,
 	&ISR8, &ISR9, &ISR10, &ISR11,
 	&ISR12, &ISR13, &ISR14, &ISR15,
 	&ISR16, &ISR17, &ISR18, &ISR19,
-	&ISR20
+	&ISR20, &ISR21, &ISR22, &ISR23
 };
 
-static volatile uint8_t *const reg_enable[MAX_ISR_REG_NUM] = {
+static volatile uint8_t *const reg_enable[] = {
 	&IER0, &IER1, &IER2, &IER3,
 	&IER4, &IER5, &IER6, &IER7,
 	&IER8, &IER9, &IER10, &IER11,
 	&IER12, &IER13, &IER14, &IER15,
 	&IER16, &IER17, &IER18, &IER19,
-	&IER20
+	&IER20, &IER21, &IER22, &IER23
 };
 
 /* edge/level trigger register */
@@ -40,7 +42,7 @@ static volatile uint8_t *const reg_ielmr[] = {
 	&IELMR8, &IELMR9, &IELMR10, &IELMR11,
 	&IELMR12, &IELMR13, &IELMR14, &IELMR15,
 	&IELMR16, &IELMR17, &IELMR18, &IELMR19,
-	&IELMR20
+	&IELMR20, &IELMR21, &IELMR22, &IELMR23,
 };
 
 /* high/low trigger register */
@@ -50,23 +52,41 @@ static volatile uint8_t *const reg_ipolr[] = {
 	&IPOLR8, &IPOLR9, &IPOLR10, &IPOLR11,
 	&IPOLR12, &IPOLR13, &IPOLR14, &IPOLR15,
 	&IPOLR16, &IPOLR17, &IPOLR18, &IPOLR19,
-	&IPOLR20
+	&IPOLR20, &IPOLR21, &IPOLR22, &IPOLR23
 };
 
-inline void set_csr(unsigned long bit)
-{
-	unsigned long __tmp;
+#define IT8XXX2_IER_COUNT ARRAY_SIZE(reg_enable)
+static uint8_t ier_setting[IT8XXX2_IER_COUNT];
 
-	if (__builtin_constant_p(bit) && (bit) < 32) {
-		__asm__ volatile \
-		("csrrs %0, mie, %1" : "=r" (__tmp) : "i" (bit));
-	} else {
-		__asm__ volatile \
-		("csrrs %0, mie, %1" : "=r" (__tmp) : "r" (bit));
+void ite_intc_save_and_disable_interrupts(void)
+{
+	/* Disable global interrupt for critical section */
+	unsigned int key = irq_lock();
+
+	/* Save and disable interrupts */
+	for (int i = 0; i < IT8XXX2_IER_COUNT; i++) {
+		ier_setting[i] = *reg_enable[i];
+		*reg_enable[i] = 0;
 	}
+	irq_unlock(key);
 }
 
-static void ite_intc_isr_clear(unsigned int irq)
+void ite_intc_restore_interrupts(void)
+{
+	/*
+	 * Ensure the highest priority interrupt will be the first fired
+	 * interrupt when soc is ready to go.
+	 */
+	unsigned int key = irq_lock();
+
+	/* Restore interrupt state */
+	for (int i = 0; i < IT8XXX2_IER_COUNT; i++) {
+		*reg_enable[i] = ier_setting[i];
+	}
+	irq_unlock(key);
+}
+
+void ite_intc_isr_clear(unsigned int irq)
 {
 	uint32_t g, i;
 	volatile uint8_t *isr;
@@ -91,7 +111,11 @@ void ite_intc_irq_enable(unsigned int irq)
 	g = irq / MAX_REGISR_IRQ_NUM;
 	i = irq % MAX_REGISR_IRQ_NUM;
 	en = reg_enable[g];
+
+	/* critical section due to run a bit-wise OR operation */
+	unsigned int key = irq_lock();
 	SET_MASK(*en, BIT(i));
+	irq_unlock(key);
 }
 
 void ite_intc_irq_disable(unsigned int irq)
@@ -105,7 +129,11 @@ void ite_intc_irq_disable(unsigned int irq)
 	g = irq / MAX_REGISR_IRQ_NUM;
 	i = irq % MAX_REGISR_IRQ_NUM;
 	en = reg_enable[g];
+
+	/* critical section due to run a bit-wise OR operation */
+	unsigned int key = irq_lock();
 	CLEAR_MASK(*en, BIT(i));
+	irq_unlock(key);
 }
 
 void ite_intc_irq_priority_set(unsigned int irq,
@@ -114,7 +142,7 @@ void ite_intc_irq_priority_set(unsigned int irq,
 	uint32_t g, i;
 	volatile uint8_t *tri;
 
-	if ((irq > CONFIG_NUM_IRQS) || (flags&IRQ_TYPE_EDGE_BOTH)) {
+	if ((irq > CONFIG_NUM_IRQS) || ((flags&IRQ_TYPE_EDGE_BOTH) == IRQ_TYPE_EDGE_BOTH)) {
 		return;
 	}
 	g = irq / MAX_REGISR_IRQ_NUM;
@@ -147,39 +175,44 @@ int ite_intc_irq_is_enable(unsigned int irq)
 	return IS_MASK_SET(*en, BIT(i));
 }
 
-void ite_intc_irq_handler(const void *arg)
+uint8_t ite_intc_get_irq_num(void)
 {
-	ARG_UNUSED(arg);
-	uint8_t irq = IVECT1 - IVECT_OFFSET_WITH_IRQ;
-	struct _isr_table_entry *ite;
-
-	/* software interrupt isr*/
-	if ((irq < CONFIG_NUM_IRQS) && (irq > 0)) {
-		ite = (struct _isr_table_entry *)&_sw_isr_table[irq];
-		ite_intc_isr_clear(irq);
-		ite->isr(ite->arg);
-	} else {
-		z_irq_spurious(NULL);
-	}
+	return intc_irq;
 }
 
 uint8_t get_irq(void *arg)
 {
 	ARG_UNUSED(arg);
-	uint8_t irq = IVECT1 - IVECT_OFFSET_WITH_IRQ;
 
-	ite_intc_isr_clear(irq);
-	return irq;
+	/* wait until two equal interrupt values are read */
+	do {
+		/* Read interrupt number from interrupt vector register */
+		intc_irq = IVECT;
+		/*
+		 * WORKAROUND: when the interrupt vector register (IVECT)
+		 * isn't latched in a load operation, we read it again to make
+		 * sure the value we got is the correct value.
+		 */
+	} while (intc_irq != IVECT);
+	/* determine interrupt number */
+	intc_irq -= IVECT_OFFSET_WITH_IRQ;
+	/* clear interrupt status */
+	ite_intc_isr_clear(intc_irq);
+	/* Clear flag on each interrupt. */
+	wait_interrupt_fired = 0;
+	/* return interrupt number */
+	return intc_irq;
 }
 
 static int ite_intc_init(const struct device *dev)
 {
-	irq_connect_dynamic(SOFT_INTC_IRQ, 0, &ite_intc_irq_handler, NULL, 0);
-	ite_intc_irq_enable(SOFT_INTC_IRQ);
-	irq_unlock(0);
+	/* Ensure interrupts of soc are disabled at default */
+	for (int i = 0; i < ARRAY_SIZE(reg_enable); i++)
+		*reg_enable[i] = 0;
 
-	/* GIE enable */
-	set_csr(MIP_MEIP);
+	/* Enable M-mode external interrupt */
+	csr_set(mie, MIP_MEIP);
+
 	return 0;
 }
 

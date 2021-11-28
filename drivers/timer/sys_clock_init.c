@@ -30,13 +30,6 @@ int __weak sys_clock_driver_init(const struct device *dev)
 	return 0;
 }
 
-int __weak sys_clock_device_ctrl(const struct device *dev,
-			       uint32_t ctrl_command,
-			       void *context, device_pm_cb cb, void *arg)
-{
-	return -ENOTSUP;
-}
-
 void __weak sys_clock_set_timeout(int32_t ticks, bool idle)
 {
 }
@@ -49,5 +42,5 @@ void __weak sys_clock_disable(void)
 {
 }
 
-SYS_DEVICE_DEFINE("sys_clock", sys_clock_driver_init, sys_clock_device_ctrl,
+SYS_DEVICE_DEFINE("sys_clock", sys_clock_driver_init,
 		PRE_KERNEL_2, CONFIG_SYSTEM_CLOCK_INIT_PRIORITY);

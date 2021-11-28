@@ -5,12 +5,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <logging/log.h>
+LOG_MODULE_REGISTER(pcie, LOG_LEVEL_ERR);
+
 #include <kernel.h>
 #include <stdbool.h>
 #include <drivers/pcie/pcie.h>
 
 #if CONFIG_PCIE_MSI
 #include <drivers/pcie/msi.h>
+#endif
+
+#ifdef CONFIG_PCIE_CONTROLLER
+#include <drivers/pcie/controller.h>
 #endif
 
 /* functions documented in drivers/pcie/pcie.h */
@@ -71,30 +78,61 @@ uint32_t pcie_get_cap(pcie_bdf_t bdf, uint32_t cap_id)
 	return reg;
 }
 
-bool pcie_get_mbar(pcie_bdf_t bdf, unsigned int index, struct pcie_mbar *mbar)
+uint32_t pcie_get_ext_cap(pcie_bdf_t bdf, uint32_t cap_id)
 {
-	uintptr_t phys_addr;
-	uint32_t reg;
-	size_t size;
+	unsigned int reg = PCIE_CONF_EXT_CAPPTR; /* Start at end of the PCI configuration space */
+	uint32_t data;
 
-	for (reg = PCIE_CONF_BAR0;
-	     index > 0 && reg <= PCIE_CONF_BAR5; reg++, index--) {
-		uintptr_t addr = pcie_conf_read(bdf, reg);
+	while (reg) {
+		data = pcie_conf_read(bdf, reg);
+		if (!data || data == 0xffffffff) {
+			return 0;
+		}
 
-		if (PCIE_CONF_BAR_MEM(addr) && PCIE_CONF_BAR_64(addr)) {
-			reg++;
+		if (PCIE_CONF_EXT_CAP_ID(data) == cap_id) {
+			break;
+		}
+
+		reg = PCIE_CONF_EXT_CAP_NEXT(data) >> 2;
+
+		if (reg < PCIE_CONF_EXT_CAPPTR) {
+			return 0;
 		}
 	}
 
-	if (index != 0 || reg > PCIE_CONF_BAR5) {
+	return reg;
+}
+
+bool pcie_get_mbar(pcie_bdf_t bdf,
+		   unsigned int bar_index,
+		   struct pcie_mbar *mbar)
+{
+	uint32_t reg = bar_index + PCIE_CONF_BAR0;
+#ifdef CONFIG_PCIE_CONTROLLER
+	const struct device *dev;
+#endif
+	uintptr_t phys_addr;
+	size_t size;
+
+#ifdef CONFIG_PCIE_CONTROLLER
+	dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_pcie_controller));
+	if (!dev) {
+		LOG_ERR("Failed to get PCIe root complex");
+		return false;
+	}
+#endif
+
+	if (reg > PCIE_CONF_BAR5) {
 		return false;
 	}
 
 	phys_addr = pcie_conf_read(bdf, reg);
+#ifndef CONFIG_PCIE_CONTROLLER
 	if (PCIE_CONF_BAR_IO(phys_addr)) {
 		/* Discard I/O bars */
 		return false;
 	}
+#endif
 
 	if (PCIE_CONF_BAR_INVAL_FLAGS(phys_addr)) {
 		/* Discard on invalid flags */
@@ -124,16 +162,58 @@ bool pcie_get_mbar(pcie_bdf_t bdf, unsigned int index, struct pcie_mbar *mbar)
 		return false;
 	}
 
-	size = PCIE_CONF_BAR_ADDR(size);
-	if (size == 0) {
-		/* Discard on invalid size */
-		return false;
+	if (PCIE_CONF_BAR_IO(phys_addr)) {
+		size = PCIE_CONF_BAR_IO_ADDR(size);
+		if (size == 0) {
+			/* Discard on invalid size */
+			return false;
+		}
+	} else {
+		size = PCIE_CONF_BAR_ADDR(size);
+		if (size == 0) {
+			/* Discard on invalid size */
+			return false;
+		}
 	}
 
+#ifdef CONFIG_PCIE_CONTROLLER
+	/* Translate to physical memory address from bus address */
+	if (!pcie_ctrl_region_xlate(dev, bdf, PCIE_CONF_BAR_MEM(phys_addr),
+				    PCIE_CONF_BAR_64(phys_addr),
+				    PCIE_CONF_BAR_MEM(phys_addr) ?
+					  PCIE_CONF_BAR_IO_ADDR(phys_addr)
+					: PCIE_CONF_BAR_ADDR(phys_addr),
+				    &mbar->phys_addr)) {
+		return false;
+	}
+#else
 	mbar->phys_addr = PCIE_CONF_BAR_ADDR(phys_addr);
+#endif /* CONFIG_PCIE_CONTROLLER */
 	mbar->size = size & ~(size-1);
 
 	return true;
+}
+
+bool pcie_probe_mbar(pcie_bdf_t bdf,
+		     unsigned int index,
+		     struct pcie_mbar *mbar)
+{
+	uint32_t reg;
+
+	for (reg = PCIE_CONF_BAR0;
+	     index > 0 && reg <= PCIE_CONF_BAR5; reg++, index--) {
+		uintptr_t addr = pcie_conf_read(bdf, reg);
+
+		if (PCIE_CONF_BAR_MEM(addr) && PCIE_CONF_BAR_64(addr)) {
+			reg++;
+		}
+	}
+
+	if (index != 0) {
+		return false;
+	}
+
+	return pcie_get_mbar(bdf, reg - PCIE_CONF_BAR0, mbar);
 }
 
 /* The first bit is used to indicate whether the list of reserved interrupts
@@ -141,6 +221,11 @@ bool pcie_get_mbar(pcie_bdf_t bdf, unsigned int index, struct pcie_mbar *mbar)
  * section in ROM.
  */
 #define IRQ_LIST_INITIALIZED 0
+
+#ifndef CONFIG_MAX_IRQ_LINES
+#warning TOFIX for non-x86
+#define CONFIG_MAX_IRQ_LINES 0
+#endif
 
 static ATOMIC_DEFINE(irq_reserved, CONFIG_MAX_IRQ_LINES);
 
@@ -223,7 +308,7 @@ unsigned int pcie_get_irq(pcie_bdf_t bdf)
 void pcie_irq_enable(pcie_bdf_t bdf, unsigned int irq)
 {
 #if CONFIG_PCIE_MSI
-	if (pcie_msi_enable(bdf, NULL, 1)) {
+	if (pcie_msi_enable(bdf, NULL, 1, irq)) {
 		return;
 	}
 #endif

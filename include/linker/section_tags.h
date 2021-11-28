@@ -14,6 +14,7 @@
 #if !defined(_ASMLANGUAGE)
 
 #define __noinit		__in_section_unique(_NOINIT_SECTION_NAME)
+#define __noinit_named(name)	__in_section_unique_named(_NOINIT_SECTION_NAME, name)
 #define __irq_vector_table	Z_GENERIC_SECTION(_IRQ_VECTOR_TABLE_SECTION_NAME)
 #define __sw_isr_table		Z_GENERIC_SECTION(_SW_ISR_TABLE_SECTION_NAME)
 
@@ -27,6 +28,8 @@
 #define __dtcm_data_section Z_GENERIC_SECTION(_DTCM_DATA_SECTION_NAME)
 #define __dtcm_bss_section Z_GENERIC_SECTION(_DTCM_BSS_SECTION_NAME)
 #define __dtcm_noinit_section Z_GENERIC_SECTION(_DTCM_NOINIT_SECTION_NAME)
+#define __ocm_data_section Z_GENERIC_SECTION(_OCM_DATA_SECTION_NAME)
+#define __ocm_bss_section Z_GENERIC_SECTION(_OCM_BSS_SECTION_NAME)
 #define __imx_boot_conf_section Z_GENERIC_SECTION(_IMX_BOOT_CONF_SECTION_NAME)
 #define __imx_boot_data_section Z_GENERIC_SECTION(_IMX_BOOT_DATA_SECTION_NAME)
 #define __imx_boot_ivt_section Z_GENERIC_SECTION(_IMX_BOOT_IVT_SECTION_NAME)
@@ -51,6 +54,40 @@
 #define __stackmem Z_GENERIC_SECTION(.user_stacks)
 #define __kstackmem __noinit
 #endif /* CONFIG_KERNEL_COHERENCE */
+
+#if defined(CONFIG_LINKER_USE_BOOT_SECTION)
+#define __boot_func	Z_GENERIC_DOT_SECTION(BOOT_TEXT_SECTION_NAME)
+#define __boot_data	Z_GENERIC_DOT_SECTION(BOOT_DATA_SECTION_NAME)
+#define __boot_rodata	Z_GENERIC_DOT_SECTION(BOOT_RODATA_SECTION_NAME)
+#define __boot_bss	Z_GENERIC_DOT_SECTION(BOOT_BSS_SECTION_NAME)
+#define __boot_noinit	Z_GENERIC_DOT_SECTION(BOOT_NOINIT_SECTION_NAME)
+#else
+#define __boot_func
+#define __boot_data
+#define __boot_rodata
+#define __boot_bss
+#define __boot_noinit	__noinit
+#endif /* CONFIG_LINKER_USE_BOOT_SECTION */
+
+#if defined(CONFIG_LINKER_USE_PINNED_SECTION)
+#define __pinned_func	Z_GENERIC_DOT_SECTION(PINNED_TEXT_SECTION_NAME)
+#define __pinned_data	Z_GENERIC_DOT_SECTION(PINNED_DATA_SECTION_NAME)
+#define __pinned_rodata	Z_GENERIC_DOT_SECTION(PINNED_RODATA_SECTION_NAME)
+#define __pinned_bss	Z_GENERIC_DOT_SECTION(PINNED_BSS_SECTION_NAME)
+#define __pinned_noinit	Z_GENERIC_DOT_SECTION(PINNED_NOINIT_SECTION_NAME)
+#else
+#define __pinned_func
+#define __pinned_data
+#define __pinned_rodata
+#define __pinned_bss
+#define __pinned_noinit	__noinit
+#endif /* CONFIG_LINKER_USE_PINNED_SECTION */
+
+#if defined(CONFIG_LINKER_USE_PINNED_SECTION)
+#define __isr		__pinned_func
+#else
+#define __isr
+#endif
 
 #endif /* !_ASMLANGUAGE */
 

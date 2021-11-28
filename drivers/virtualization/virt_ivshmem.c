@@ -70,7 +70,7 @@ static bool ivshmem_configure_interrupts(const struct device *dev)
 
 	LOG_DBG("%u MSI-X Vectors connected", n_vectors);
 
-	if (!pcie_msi_enable(data->bdf, data->vectors, n_vectors)) {
+	if (!pcie_msi_enable(data->bdf, data->vectors, n_vectors, 0)) {
 		LOG_ERR("Could not enable MSI-X");
 		goto out;
 	}
@@ -243,5 +243,5 @@ static int ivshmem_init(const struct device *dev)
 static struct ivshmem ivshmem_data;
 
 DEVICE_DEFINE(ivshmem, CONFIG_IVSHMEM_DEV_NAME,
-	      ivshmem_init, device_pm_control_nop, &ivshmem_data, NULL,
+	      ivshmem_init, NULL, &ivshmem_data, NULL,
 	      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &ivshmem_api);

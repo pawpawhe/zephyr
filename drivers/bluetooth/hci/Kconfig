@@ -25,6 +25,7 @@ config BT_H5
 	bool "H:5 UART [EXPERIMENTAL]"
 	select UART_INTERRUPT_DRIVEN
 	select BT_UART
+	select EXPERIMENTAL
 	depends on SERIAL
 	help
 	  Bluetooth three-wire (H:5) UART driver. Implementation of HCI
@@ -63,6 +64,11 @@ config BT_USERCHAN
 	  The Bluetooth adapter must be powered off in order for Zephyr to
 	  be able to use it.
 
+config BT_ESP32
+	bool "ESP32 HCI driver"
+	help
+	  Espressif HCI bluetooth interface
+
 config BT_NO_DRIVER
 	bool "No default HCI driver"
 	help
@@ -70,18 +76,6 @@ config BT_NO_DRIVER
 	  should be selected.
 
 endchoice
-
-# Workaround for not being able to have commas in macro arguments
-DT_CHOSEN_Z_BT_UART := zephyr,bt-uart
-
-config BT_UART_ON_DEV_NAME
-	string "Device Name of UART Device for Bluetooth"
-	default "$(dt_chosen_label,$(DT_CHOSEN_Z_BT_UART))" if HAS_DTS
-	default "UART_0"
-	depends on BT_UART
-	help
-	  This option specifies the name of UART device to be used
-	  for Bluetooth.
 
 if BT_SPI
 
@@ -128,7 +122,7 @@ endif # BT_RPMSG_NRF53
 config BT_DRIVER_QUIRK_NO_AUTO_DLE
 	bool "Host auto-initiated Data Length Update quirk"
 	depends on BT_AUTO_DATA_LEN_UPDATE
-	default y if BT_RPMSG_NRF53
+	default y if BT_RPMSG_NRF53 || BT_ESP32
 	help
 	  Enable the quirk wherein BT Host stack will auto-initiate Data Length
 	  Update procedure for new connections for controllers that do not

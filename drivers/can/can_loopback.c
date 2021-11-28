@@ -236,6 +236,13 @@ int can_loopback_get_core_clock(const struct device *dev, uint32_t *rate)
 	return 0;
 }
 
+int can_loopback_get_max_filters(const struct device *dev, enum can_ide id_type)
+{
+	ARG_UNUSED(id_type);
+
+	return CONFIG_CAN_MAX_FILTER;
+}
+
 static const struct can_driver_api can_api_funcs = {
 	.set_mode = can_loopback_set_mode,
 	.set_timing = can_loopback_set_timing,
@@ -248,6 +255,7 @@ static const struct can_driver_api can_api_funcs = {
 #endif
 	.register_state_change_isr = can_loopback_register_state_change_isr,
 	.get_core_clock = can_loopback_get_core_clock,
+	.get_max_filters = can_loopback_get_max_filters,
 	.timing_min = {
 		.sjw = 0x1,
 		.prop_seg = 0x01,
@@ -293,9 +301,9 @@ static int can_loopback_init(const struct device *dev)
 static struct can_loopback_data can_loopback_dev_data_1;
 
 DEVICE_DEFINE(can_loopback_1, CONFIG_CAN_LOOPBACK_DEV_NAME,
-		    &can_loopback_init, device_pm_control_nop,
+		    &can_loopback_init, NULL,
 		    &can_loopback_dev_data_1, NULL,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    POST_KERNEL, CONFIG_CAN_INIT_PRIORITY,
 		    &can_api_funcs);
 
 
@@ -327,8 +335,8 @@ static int socket_can_init_1(const struct device *dev)
 }
 
 NET_DEVICE_INIT(socket_can_loopback_1, SOCKET_CAN_NAME_1, socket_can_init_1,
-		device_pm_control_nop, &socket_can_context_1, NULL,
-		CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		NULL, &socket_can_context_1, NULL,
+		CONFIG_CAN_INIT_PRIORITY,
 		&socket_can_api,
 		CANBUS_RAW_L2, NET_L2_GET_CTX_TYPE(CANBUS_RAW_L2), CAN_MTU);
 

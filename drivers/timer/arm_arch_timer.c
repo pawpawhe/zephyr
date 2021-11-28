@@ -16,13 +16,31 @@
 #define MIN_DELAY	(1000)
 
 static struct k_spinlock lock;
-static volatile uint64_t last_cycle;
+static uint64_t last_cycle;
 
 static void arm_arch_timer_compare_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 
 	k_spinlock_key_t key = k_spin_lock(&lock);
+
+#ifdef CONFIG_ARM_ARCH_TIMER_ERRATUM_740657
+	/*
+	 * Workaround required for Cortex-A9 MPCore erratum 740657
+	 * comp. ARM Cortex-A9 processors Software Developers Errata Notice,
+	 * ARM document ID032315.
+	 */
+
+	if (!arm_arch_timer_get_int_status()) {
+		/*
+		 * If the event flag is not set, this is a spurious interrupt.
+		 * DO NOT modify the compare register's value, DO NOT announce
+		 * elapsed ticks!
+		 */
+		k_spin_unlock(&lock, key);
+		return;
+	}
+#endif /* CONFIG_ARM_ARCH_TIMER_ERRATUM_740657 */
 
 	uint64_t curr_cycle = arm_arch_timer_count();
 	uint32_t delta_ticks = (uint32_t)((curr_cycle - last_cycle) / CYC_PER_TICK);
@@ -39,11 +57,32 @@ static void arm_arch_timer_compare_isr(const void *arg)
 		arm_arch_timer_set_irq_mask(false);
 	} else {
 		arm_arch_timer_set_irq_mask(true);
+#ifdef CONFIG_ARM_ARCH_TIMER_ERRATUM_740657
+		/*
+		 * In tickless mode, the compare register is normally not
+		 * updated from within the ISR. Yet, to work around the timer's
+		 * erratum, a new value *must* be written while the interrupt
+		 * is being processed before the interrupt is acknowledged
+		 * by the handling interrupt controller.
+		 */
+		arm_arch_timer_set_compare(~0ULL);
 	}
+
+	/*
+	 * Clear the event flag so that in case the erratum strikes (the timer's
+	 * vector will still be indicated as pending by the GIC's pending register
+	 * after this ISR has been executed) the error will be detected by the
+	 * check performed upon entry of the ISR -> the event flag is not set,
+	 * therefore, no actual hardware interrupt has occurred.
+	 */
+	arm_arch_timer_clear_int_status();
+#else
+	}
+#endif /* CONFIG_ARM_ARCH_TIMER_ERRATUM_740657 */
 
 	k_spin_unlock(&lock, key);
 
-	sys_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL) ? delta_ticks : 1);
+	sys_clock_announce(delta_ticks);
 }
 
 int sys_clock_driver_init(const struct device *dev)
@@ -112,6 +151,11 @@ uint32_t sys_clock_elapsed(void)
 uint32_t sys_clock_cycle_get_32(void)
 {
 	return (uint32_t)arm_arch_timer_count();
+}
+
+uint64_t sys_clock_cycle_get_64(void)
+{
+	return arm_arch_timer_count();
 }
 
 #ifdef CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT

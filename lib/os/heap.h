@@ -69,12 +69,22 @@ struct z_heap {
 	chunkid_t chunk0_hdr[2];
 	chunkid_t end_chunk;
 	uint32_t avail_buckets;
+#ifdef CONFIG_SYS_HEAP_RUNTIME_STATS
+	size_t free_bytes;
+	size_t allocated_bytes;
+#endif
 	struct z_heap_bucket buckets[0];
 };
 
 static inline bool big_heap_chunks(chunksz_t chunks)
 {
-	return sizeof(void *) > 4U || chunks > 0x7fffU;
+	if (IS_ENABLED(CONFIG_SYS_HEAP_SMALL_ONLY)) {
+		return false;
+	}
+	if (IS_ENABLED(CONFIG_SYS_HEAP_BIG_ONLY) || sizeof(void *) > 4U) {
+		return true;
+	}
+	return chunks > 0x7fffU;
 }
 
 static inline bool big_heap_bytes(size_t bytes)
@@ -231,9 +241,9 @@ static inline chunksz_t min_chunk_size(struct z_heap *h)
 	return bytes_to_chunksz(h, 1);
 }
 
-static inline size_t chunksz_to_bytes(struct z_heap *h, chunksz_t chunksz)
+static inline size_t chunksz_to_bytes(struct z_heap *h, chunksz_t chunksz_in)
 {
-	return chunksz * CHUNK_UNIT - chunk_header_bytes(h);
+	return chunksz_in * CHUNK_UNIT - chunk_header_bytes(h);
 }
 
 static inline int bucket_idx(struct z_heap *h, chunksz_t sz)

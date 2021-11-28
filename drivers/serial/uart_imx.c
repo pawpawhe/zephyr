@@ -316,10 +316,10 @@ static const struct uart_driver_api uart_imx_driver_api = {
 									\
 	static const struct imx_uart_config imx_uart_##n##_config;	\
 									\
-	DEVICE_DT_INST_DEFINE(n, &uart_imx_init, device_pm_control_nop,	\
+	DEVICE_DT_INST_DEFINE(n, &uart_imx_init, NULL,			\
 			&imx_uart_##n##_data, &imx_uart_##n##_config,	\
 			PRE_KERNEL_1,					\
-			CONFIG_KERNEL_INIT_PRIORITY_DEVICE,		\
+			CONFIG_SERIAL_INIT_PRIORITY,			\
 			&uart_imx_driver_api);				\
 									\
 	UART_IMX_CONFIG_FUNC(n)						\

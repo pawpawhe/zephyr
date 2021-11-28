@@ -225,16 +225,17 @@ static const struct gpio_driver_api mcux_igpio_driver_api = {
 									\
 	DEVICE_DT_INST_DEFINE(n,					\
 			    mcux_igpio_##n##_init,			\
-			    device_pm_control_nop,			\
+			    NULL,					\
 			    &mcux_igpio_##n##_data,			\
 			    &mcux_igpio_##n##_config,			\
 			    POST_KERNEL,				\
-			    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,	\
+			    CONFIG_GPIO_INIT_PRIORITY,			\
 			    &mcux_igpio_driver_api);			\
 									\
 	static int mcux_igpio_##n##_init(const struct device *dev)	\
 	{								\
-		MCUX_IGPIO_IRQ_INIT(n, 0);				\
+		IF_ENABLED(DT_INST_IRQ_HAS_IDX(n, 0),			\
+		   (MCUX_IGPIO_IRQ_INIT(n, 0);))		\
 									\
 		IF_ENABLED(DT_INST_IRQ_HAS_IDX(n, 1),			\
 			   (MCUX_IGPIO_IRQ_INIT(n, 1);))		\

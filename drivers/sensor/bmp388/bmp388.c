@@ -52,7 +52,7 @@ static int bmp388_transceive(const struct device *dev,
 	const struct spi_buf buf = { .buf = data, .len = length };
 	const struct spi_buf_set s = { .buffers = &buf, .count = 1 };
 
-	return spi_transceive(cfg->bus, &cfg->spi_cfg, &s, &s);
+	return spi_transceive_dt(&cfg->spi_bus, &s, &s);
 }
 
 static int bmp388_read_spi(const struct device *dev,
@@ -71,7 +71,7 @@ static int bmp388_read_spi(const struct device *dev,
 	const struct spi_buf_set tx = { .buffers = buf, .count = 1 };
 	const struct spi_buf_set rx = { .buffers = buf, .count = 2 };
 
-	return spi_transceive(cfg->bus, &cfg->spi_cfg, &tx, &rx);
+	return spi_transceive_dt(&cfg->spi_bus, &tx, &rx);
 }
 
 static int bmp388_byte_read_spi(const struct device *dev,
@@ -310,10 +310,11 @@ static int bmp388_attr_set(const struct device *dev,
 {
 	int ret;
 
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-	struct bmp388_data *data = DEV_DATA(dev);
+#ifdef CONFIG_PM_DEVICE
+	enum pm_device_state state;
 
-	if (data->device_power_state != DEVICE_PM_ACTIVE_STATE) {
+	(void)pm_device_state_get(dev, &state);
+	if (state != PM_DEVICE_STATE_ACTIVE) {
 		return -EBUSY;
 	}
 #endif
@@ -347,13 +348,16 @@ static int bmp388_sample_fetch(const struct device *dev,
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL);
 
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-	if (bmp388->device_power_state != DEVICE_PM_ACTIVE_STATE) {
+#ifdef CONFIG_PM_DEVICE
+	enum pm_device_state state;
+
+	(void)pm_device_state_get(dev, &state);
+	if (state != PM_DEVICE_STATE_ACTIVE) {
 		return -EBUSY;
 	}
 #endif
 
-	device_busy_set(dev);
+	pm_device_busy_set(dev);
 
 	/* Wait for status to indicate that data is ready. */
 	raw[0] = 0U;
@@ -382,7 +386,7 @@ static int bmp388_sample_fetch(const struct device *dev,
 	bmp388->sample.comp_temp = 0;
 
 error:
-	device_busy_clear(dev);
+	pm_device_busy_clear(dev);
 	return ret;
 }
 
@@ -544,26 +548,21 @@ static int bmp388_get_calibration_data(const struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-static int bmp388_set_power_state(const struct device *dev,
-				  uint32_t power_state)
+#ifdef CONFIG_PM_DEVICE
+static int bmp388_pm_action(const struct device *dev,
+			    enum pm_device_action action)
 {
 	uint8_t reg_val;
 
-	struct bmp388_data *data = DEV_DATA(dev);
-
-	if (data->device_power_state == power_state) {
-		/* We are already in the desired state. */
-		return 0;
-	}
-
-	if (power_state == DEVICE_PM_ACTIVE_STATE) {
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
 		reg_val = BMP388_PWR_CTRL_MODE_NORMAL;
-	} else if ((power_state == DEVICE_PM_SUSPEND_STATE) ||
-		   (power_state == DEVICE_PM_OFF_STATE)) {
+		break;
+	case PM_DEVICE_ACTION_SUSPEND:
 		reg_val = BMP388_PWR_CTRL_MODE_SLEEP;
-	} else {
-		return 0;
+		break;
+	default:
+		return -ENOTSUP;
 	}
 
 	if (bmp388_reg_field_update(dev,
@@ -574,39 +573,9 @@ static int bmp388_set_power_state(const struct device *dev,
 		return -EIO;
 	}
 
-	data->device_power_state = power_state;
-
 	return 0;
 }
-
-static uint32_t bmp388_get_power_state(const struct device *dev)
-{
-	struct bmp388_data *ctx = DEV_DATA(dev);
-
-	return ctx->device_power_state;
-}
-
-static int bmp388_device_ctrl(
-	const struct device *dev,
-	uint32_t ctrl_command,
-	void *context,
-	device_pm_cb cb,
-	void *arg)
-{
-	int ret = 0;
-
-	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
-		ret = bmp388_set_power_state(dev, *((uint32_t *)context));
-	} else if (ctrl_command == DEVICE_PM_GET_POWER_STATE) {
-		*((uint32_t *)context) = bmp388_get_power_state(dev);
-	}
-
-	if (cb) {
-		cb(dev, ret, context, arg);
-	}
-	return ret;
-}
-#endif /* CONFIG_DEVICE_POWER_MANAGEMENT */
+#endif /* CONFIG_PM_DEVICE */
 
 static const struct sensor_driver_api bmp388_api = {
 	.attr_set = bmp388_attr_set,
@@ -633,10 +602,10 @@ static int bmp388_init(const struct device *dev)
 	}
 
 #if DT_ANY_INST_ON_BUS_STATUS_OKAY(spi)
-	/* Verify that the CS device is ready if it is set in the DT. */
-	if (is_spi && (cfg->spi_cfg.cs != NULL)) {
-		if (!device_is_ready(cfg->spi_cfg.cs->gpio_dev)) {
-			LOG_ERR("SPI CS device is not ready");
+	/* Verify the SPI bus */
+	if (is_spi) {
+		if (!spi_is_ready(&cfg->spi_bus)) {
+			LOG_ERR("SPI bus is not ready");
 			return -ENODEV;
 		}
 	}
@@ -670,10 +639,6 @@ static int bmp388_init(const struct device *dev)
 		LOG_ERR("Unsupported chip detected (0x%x)!", val);
 		return -ENODEV;
 	}
-
-#ifdef CONFIG_DEVICE_POWER_MANAGEMENT
-	bmp388->device_power_state = DEVICE_PM_ACTIVE_STATE;
-#endif
 
 	/* Read calibration data */
 	if (bmp388_get_calibration_data(dev) < 0) {
@@ -729,7 +694,7 @@ static int bmp388_init(const struct device *dev)
 
 #define BMP388_BUS_CFG_SPI(inst) \
 	.ops = &bmp388_spi_ops,	 \
-	.spi_cfg = SPI_CONFIG_DT_INST(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0)
+	.spi_bus = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0)
 
 #define BMP388_BUS_CFG(inst)			\
 	COND_CODE_1(DT_INST_ON_BUS(inst, i2c),	\
@@ -738,27 +703,28 @@ static int bmp388_init(const struct device *dev)
 
 #if defined(CONFIG_BMP388_TRIGGER)
 #define BMP388_INT_CFG(inst) \
-	.gpio_int = GPIO_DT_SPEC_GET(DT_DRV_INST(inst), int_gpios),
+	.gpio_int = GPIO_DT_SPEC_INST_GET(inst, int_gpios),
 #else
 #define BMP388_INT_CFG(inst)
 #endif
 
 #define BMP388_INST(inst)						   \
 	static struct bmp388_data bmp388_data_##inst = {		   \
-		.odr = DT_ENUM_IDX(DT_DRV_INST(inst), odr),		   \
-		.osr_pressure = DT_ENUM_IDX(DT_DRV_INST(inst), osr_press), \
-		.osr_temp = DT_ENUM_IDX(DT_DRV_INST(inst), osr_temp),	   \
+		.odr = DT_INST_ENUM_IDX(inst, odr),			   \
+		.osr_pressure = DT_INST_ENUM_IDX(inst, osr_press),	   \
+		.osr_temp = DT_INST_ENUM_IDX(inst, osr_temp),		   \
 	};								   \
 	static const struct bmp388_config bmp388_config_##inst = {	   \
 		.bus = DEVICE_DT_GET(DT_INST_BUS(inst)),		   \
 		BMP388_BUS_CFG(inst),					   \
 		BMP388_INT_CFG(inst)					   \
-		.iir_filter = DT_ENUM_IDX(DT_DRV_INST(inst), iir_filter),  \
+		.iir_filter = DT_INST_ENUM_IDX(inst, iir_filter),	   \
 	};								   \
+	PM_DEVICE_DT_INST_DEFINE(inst, bmp388_pm_action);		   \
 	DEVICE_DT_INST_DEFINE(						   \
 		inst,							   \
 		bmp388_init,						   \
-		bmp388_device_ctrl,					   \
+		PM_DEVICE_DT_INST_REF(inst),				   \
 		&bmp388_data_##inst,					   \
 		&bmp388_config_##inst,					   \
 		POST_KERNEL,						   \

@@ -27,6 +27,19 @@ config LOG_MIPI_SYST_ENABLE
 	help
 	  Enable MIPI SyS-T format output for the logger system.
 
+config LOG_DICTIONARY_SUPPORT
+	bool
+	depends on LOG2
+	help
+	  Enable support for dictionary based logging.
+
+	  Dictionary based logging is binary based where predefined strings
+	  are replaced with their equivalent addresses from the built binary
+	  image file in log output. This reduces the size required to store
+	  the log output when there are long format strings to be logged.
+
+	  This should be selected by the backend automatically.
+
 config LOG_IMMEDIATE_CLEAN_OUTPUT
 	bool "Clean log output"
 	depends on LOG_IMMEDIATE
@@ -45,10 +58,17 @@ config LOG_BACKEND_SHOW_COLOR
 	help
 	  When enabled selected backend prints errors in red and warning in yellow.
 
+if LOG_BACKEND_SHOW_COLOR
+
+config LOG_INFO_COLOR_GREEN
+	bool "Use green color for info level logs"
+
+endif
+
 config LOG_BACKEND_FORMAT_TIMESTAMP
 	bool "Enable timestamp formatting in the backend"
 	depends on LOG_BACKEND_UART || LOG_BACKEND_NATIVE_POSIX || LOG_BACKEND_RTT \
-	           || LOG_BACKEND_SWO || LOG_BACKEND_XTENSA_SIM
+	           || LOG_BACKEND_SWO || LOG_BACKEND_XTENSA_SIM || LOG_BACKEND_FS
 	default y
 	help
 	  When enabled timestamp is formatted to hh:mm:ss:ms,us.

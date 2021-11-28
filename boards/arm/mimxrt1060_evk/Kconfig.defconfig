@@ -16,6 +16,18 @@ endchoice
 config DISK_DRIVER_SDMMC
 	default y if DISK_DRIVERS
 
+config FLASH_MCUX_FLEXSPI_NOR
+	default y if BOARD_MIMXRT1060_EVK
+	default n if BOARD_MIMXRT1060_EVK_HYPERFLASH
+
+config FLASH_MCUX_FLEXSPI_HYPERFLASH
+	default y if BOARD_MIMXRT1060_EVK_HYPERFLASH
+	default n if BOARD_MIMXRT1060_EVK
+
+config FLASH_MCUX_FLEXSPI_XIP
+	default y if FLASH
+	depends on MEMC_MCUX_FLEXSPI
+
 config I2C
 	default y if KSCAN
 
@@ -29,9 +41,6 @@ config KSCAN_FT5336
 
 config KSCAN_FT5336_INTERRUPT
 	default y
-
-config KSCAN_INIT_PRIORITY
-	default 60
 
 endif # KSCAN
 

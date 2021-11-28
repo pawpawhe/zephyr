@@ -94,6 +94,14 @@ the expected device life (in minutes) can be calculated as::
 From this formula it is also clear what to do in case the expected life is too
 short: increase ``SECTOR_COUNT`` or ``SECTOR_SIZE``.
 
+Flash write block size migration
+********************************
+It is possible that during a DFU process, the flash driver used by the NVS
+changes the supported minimal write block size.
+The NVS in-flash image will stay compatible unless the
+physical ATE size changes.
+Especially, migration between 1,2,4,8-bytes write block sizes is allowed.
+
 Sample
 ******
 
@@ -105,7 +113,7 @@ Troubleshooting
 MPU fault while using NVS, or ``-ETIMEDOUT`` error returned
    NVS can use the internal flash of the SoC.  While the MPU is enabled,
    the flash driver requires MPU RWX access to flash memory, configured
-   using :option:`CONFIG_MPU_ALLOW_FLASH_WRITE`.  If this option is
+   using :kconfig:`CONFIG_MPU_ALLOW_FLASH_WRITE`.  If this option is
    disabled, the NVS application will get an MPU fault if it references
    the internal SoC flash and it's the only thread running.  In a
    multi-threaded application, another thread might intercept the fault
@@ -118,10 +126,8 @@ API Reference
 The NVS subsystem APIs are provided by ``nvs.h``:
 
 .. doxygengroup:: nvs_data_structures
-   :project: Zephyr
 
 .. doxygengroup:: nvs_high_level_api
-   :project: Zephyr
 
 .. comment
    not documenting

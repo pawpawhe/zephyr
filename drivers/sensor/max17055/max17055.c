@@ -42,7 +42,7 @@ static int max17055_reg_read(struct max17055_data *priv, int reg_addr,
 }
 
 static int max17055_reg_write(struct max17055_data *priv, int reg_addr,
-			      int16_t val)
+			      uint16_t val)
 {
 	uint8_t i2c_data[2];
 
@@ -401,7 +401,7 @@ static const struct sensor_driver_api max17055_battery_driver_api = {
 	};										   \
 											   \
 	DEVICE_DT_INST_DEFINE(index, &max17055_gauge_init,				   \
-			      device_pm_control_nop,					   \
+			      NULL,							   \
 			      &max17055_driver_##index,					   \
 			      &max17055_config_##index, POST_KERNEL,			   \
 			      CONFIG_SENSOR_INIT_PRIORITY,				   \

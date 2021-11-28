@@ -18,6 +18,10 @@ config DISK_DRIVER_SDMMC
 config FLASH_MCUX_FLEXSPI_NOR
 	default y if FLASH
 
+config FLASH_MCUX_FLEXSPI_XIP
+	default y if FLASH
+	depends on MEMC_MCUX_FLEXSPI
+
 config I2C
 	default y if KSCAN
 
@@ -31,9 +35,6 @@ config KSCAN_FT5336
 
 config KSCAN_FT5336_INTERRUPT
 	default y
-
-config KSCAN_INIT_PRIORITY
-	default 60
 
 endif # KSCAN
 

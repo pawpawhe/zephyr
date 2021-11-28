@@ -29,7 +29,7 @@ protocol stack:
   way.
 * **Controller**: The Controller implements the Link Layer (LE LL), the
   low-level, real-time protocol which provides, in conjunction with the Radio
-  Hardware, standard interoperable over the air communication. The LL schedules
+  Hardware, standard-interoperable over-the-air communication. The LL schedules
   packet reception and transmission, guarantees the delivery of data, and
   handles all the LL control procedures.
 * **Radio Hardware**: Hardware implements the required analog and digital
@@ -106,20 +106,20 @@ BLE-enabled builds that can be produced from the Zephyr project codebase:
   and responding with events and received data.  A build of this type sets the
   following Kconfig option values:
 
-  * :option:`CONFIG_BT` ``=y``
-  * :option:`CONFIG_BT_HCI` ``=y``
-  * :option:`CONFIG_BT_HCI_RAW` ``=y``
-  * :option:`CONFIG_BT_CTLR` ``=y``
-  * :option:`CONFIG_BT_LL_SW_SPLIT` ``=y`` (if using the open source Link Layer)
+  * :kconfig:`CONFIG_BT` ``=y``
+  * :kconfig:`CONFIG_BT_HCI` ``=y``
+  * :kconfig:`CONFIG_BT_HCI_RAW` ``=y``
+  * :kconfig:`CONFIG_BT_CTLR` ``=y``
+  * :kconfig:`CONFIG_BT_LL_SW_SPLIT` ``=y`` (if using the open source Link Layer)
 
 * **Host-only build**: A Zephyr OS Host build will contain the Application and
   the BLE Host, along with an HCI driver (UART or SPI) to interface with an
   external Controller chip.
   A build of this type sets the following Kconfig option values:
 
-  * :option:`CONFIG_BT` ``=y``
-  * :option:`CONFIG_BT_HCI` ``=y``
-  * :option:`CONFIG_BT_CTLR` ``=n``
+  * :kconfig:`CONFIG_BT` ``=y``
+  * :kconfig:`CONFIG_BT_HCI` ``=y``
+  * :kconfig:`CONFIG_BT_CTLR` ``=n``
 
   All of the samples located in ``samples/bluetooth`` except for the ones
   used for Controller-only builds can be built as Host-only
@@ -128,10 +128,10 @@ BLE-enabled builds that can be produced from the Zephyr project codebase:
   Controller, and it is used exclusively for single-chip (SoC) configurations.
   A build of this type sets the following Kconfig option values:
 
-  * :option:`CONFIG_BT` ``=y``
-  * :option:`CONFIG_BT_HCI` ``=y``
-  * :option:`CONFIG_BT_CTLR` ``=y``
-  * :option:`CONFIG_BT_LL_SW_SPLIT` ``=y`` (if using the open source Link Layer)
+  * :kconfig:`CONFIG_BT` ``=y``
+  * :kconfig:`CONFIG_BT_HCI` ``=y``
+  * :kconfig:`CONFIG_BT_CTLR` ``=y``
+  * :kconfig:`CONFIG_BT_LL_SW_SPLIT` ``=y`` (if using the open source Link Layer)
 
   All of the samples located in ``samples/bluetooth`` except for the ones
   used for Controller-only builds can be built as Combined
@@ -243,12 +243,12 @@ four distinct roles of BLE usage:
   * Observer (scanning for BLE advertisements)
 
 Each role comes with its own build-time configuration option:
-:option:`CONFIG_BT_PERIPHERAL`, :option:`CONFIG_BT_CENTRAL`,
-:option:`CONFIG_BT_BROADCASTER` & :option:`CONFIG_BT_OBSERVER`. Of the
+:kconfig:`CONFIG_BT_PERIPHERAL`, :kconfig:`CONFIG_BT_CENTRAL`,
+:kconfig:`CONFIG_BT_BROADCASTER` & :kconfig:`CONFIG_BT_OBSERVER`. Of the
 connection-oriented roles central implicitly enables observer role, and
 peripheral implicitly enables broadcaster role. Usually the first step
 when creating an application is to decide which roles are needed and go
-from there. Bluetooth Mesh is a slightly special case, requiring at
+from there. Bluetooth mesh is a slightly special case, requiring at
 least the observer and broadcaster roles, and possibly also the
 Peripheral role. This will be described in more detail in a later
 section.
@@ -332,17 +332,17 @@ capable of displaying a passkey to the user.
 Depending on the local and remote security requirements & capabilities,
 there are four possible security levels that can be reached:
 
-    :c:enumerator:`BT_SECURITY_LOW`
+    :c:enumerator:`BT_SECURITY_L1`
         No encryption and no authentication.
 
-    :c:enumerator:`BT_SECURITY_MEDIUM`
+    :c:enumerator:`BT_SECURITY_L2`
         Encryption but no authentication (no MITM protection).
 
-    :c:enumerator:`BT_SECURITY_HIGH`
+    :c:enumerator:`BT_SECURITY_L3`
         Encryption and authentication using the legacy pairing method
         from Bluetooth 4.0 and 4.1.
 
-    :c:enumerator:`BT_SECURITY_FIPS`
+    :c:enumerator:`BT_SECURITY_L4`
         Encryption and authentication using the LE Secure Connections
         feature available since Bluetooth 4.2.
 
@@ -376,7 +376,7 @@ default, mesh requires both observer and broadcaster role to be enabled.
 If the optional GATT Proxy feature is desired, then peripheral role
 should also be enabled.
 
-The API reference for Mesh can be found in the
+The API reference for mesh can be found in the
 :ref:`Mesh API reference section <bluetooth_mesh>`.
 
 .. _bluetooth-persistent-storage:
@@ -402,8 +402,98 @@ Once enabled, it is the responsibility of the application to call
 settings_load() after having initialized Bluetooth (using the
 bt_enable() API).
 
-BLE Controller
-**************
+Bluetooth Low Energy Controller
+*******************************
+
+Hardware Requirements
+=====================
+
+Nordic Semiconductor
+--------------------
+
+The Nordic Semiconductor Bluetooth Low Energy Controller implementation
+requires the following hardware peripherals.
+
+#. Clock
+
+   * A Low Frequency Clock (LFCLOCK) or sleep clock, for low power consumption
+     between Bluetooth radio events
+   * A High Frequency Clock (HFCLOCK) or active clock, for high precision
+     packet timing and software based transceiver state switching with
+     inter-frame space (tIFS) timing inside Bluetooth radio events
+
+#. Real Time Counter (RTC)
+
+   * 1 instance
+   * 2 capture/compare registers
+
+#. Timer
+
+   * 2 instances, one each for packet timing and tIFS software switching,
+     respectively
+   * 7 capture/compare registers (3 mandatory, 1 optional for ISR profiling, 4
+     for single timer tIFS switching) on first instance
+   * 4 capture/compare registers for second instance, if single tIFS timer is
+     not used.
+
+#. Programmable Peripheral Interconnect (PPI)
+
+   * 21 channels (20 channels when not using pre-defined channels)
+   * 2 channel groups for software-based tIFS switching
+
+#. Distributed Programmable Peripheral Interconnect (DPPI)
+
+   * 20 channels
+   * 2 channel groups for s/w tIFS switching
+
+#. Software Interrupt (SWI)
+
+   * 3 instances, for Lower Link Layer, Upper Link Layer High priority, and
+     Upper Link Layer Low priority execution
+
+#. Radio
+
+   * 2.4 GHz radio transceiver with multiple radio standards such as 1 Mbps, 2
+     Mbps and Long Range Bluetooth Low Energy technology
+
+#. Random Number Generator (RNG)
+
+   * 1 instance
+
+#. AES electronic codebook mode encryption (ECB)
+
+   * 1 instance
+
+#. Cipher Block Chaining - Message Authentication Code with Counter Mode
+   encryption (CCM)
+
+   * 1 instance
+
+#. Accelerated address resolver (AAR)
+
+   * 1 instance
+
+#. GPIO
+
+   * 2 GPIO pins for PA and LNA, 1 each.
+   * 10 Debug GPIO pins (optional)
+
+#. GPIO tasks and events (GPIOTE)
+
+   * 1 instance
+   * 1 channel for PA/LNA
+
+#. Temperature sensor (TEMP)
+
+   * For RC calibration
+
+#. Interprocess Communication peripheral (IPC)
+
+   * For HCI interface
+
+#. UART
+
+   * For HCI interface
 
 Standard
 ========

@@ -24,7 +24,7 @@
 #include <drivers/clock_control/stm32_clock_control.h>
 #include <sys/util.h>
 #include <drivers/gpio.h>
-#include <pinmux/stm32/pinmux_stm32.h>
+#include <drivers/pinctrl.h>
 #include "stm32_hsem.h"
 
 #define LOG_LEVEL CONFIG_USB_DRIVER_LOG_LEVEL
@@ -44,8 +44,9 @@ LOG_MODULE_REGISTER(usb_dc_stm32);
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_usb)
 #define DT_DRV_COMPAT st_stm32_usb
 #define USB_IRQ_NAME  usb
-#if DT_INST_NODE_HAS_PROP(0, enable_pin_remap)
+#if DT_INST_PROP(0, enable_pin_remap)
 #define USB_ENABLE_PIN_REMAP	DT_INST_PROP(0, enable_pin_remap)
+#warning "Property deprecated in favor of property 'remap-pa11-pa12' from 'st-stm32-pinctrl'"
 #endif
 #endif
 
@@ -59,23 +60,25 @@ LOG_MODULE_REGISTER(usb_dc_stm32);
 #if DT_INST_NODE_HAS_PROP(0, maximum_speed)
 #define USB_MAXIMUM_SPEED	DT_INST_PROP(0, maximum_speed)
 #endif
-static const struct soc_gpio_pinctrl usb_pinctrl[] =
-						ST_STM32_DT_INST_PINCTRL(0, 0);
 
+PINCTRL_DT_INST_DEFINE(0)
+static const struct pinctrl_dev_config *usb_pcfg =
+					PINCTRL_DT_INST_DEV_CONFIG_GET(0);
 
 #define USB_OTG_HS_EMB_PHY (DT_HAS_COMPAT_STATUS_OKAY(st_stm32_usbphyc) && \
 			    DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs))
 
 /*
- * USB and USB_OTG_FS are defined in STM32Cube HAL and allows to distinguish
- * between two kind of USB DC. STM32 F0, F3, L0 and G4 series support USB device
- * controller. STM32 F4 and F7 series support USB_OTG_FS device controller.
- * STM32 F1 and L4 series support either USB or USB_OTG_FS device controller.
+ * USB, USB_OTG_FS and USB_DRD_FS are defined in STM32Cube HAL and allows to
+ * distinguish between two kind of USB DC. STM32 F0, F3, L0 and G4 series
+ * support USB device controller. STM32 F4 and F7 series support USB_OTG_FS
+ * device controller. STM32 F1 and L4 series support either USB or USB_OTG_FS
+ * device controller.STM32 G0 series supports USB_DRD_FS device controller.
  *
- * WARNING: Don't mix USB defined in STM32Cube HAL and CONFIG_USB from Zephyr
+ * WARNING: Don't mix USB defined in STM32Cube HAL and CONFIG_USB_* from Zephyr
  * Kconfig system.
  */
-#ifdef USB
+#if defined(USB) || defined(USB_DRD_FS)
 
 #define EP0_MPS 64U
 #define EP_MPS 64U
@@ -145,7 +148,7 @@ struct usb_dc_stm32_state {
 	struct usb_dc_stm32_ep_state in_ep_state[USB_NUM_BIDIR_ENDPOINTS];
 	uint8_t ep_buf[USB_NUM_BIDIR_ENDPOINTS][EP_MPS];
 
-#ifdef USB
+#if defined(USB) || defined(USB_DRD_FS)
 	uint32_t pma_offset;
 #endif /* USB */
 };
@@ -200,12 +203,14 @@ static int usb_dc_stm32_clock_enable(void)
 	 */
 #if defined(RCC_HSI48_SUPPORT) || \
 	defined(CONFIG_SOC_SERIES_STM32WBX) || \
-	defined(CONFIG_SOC_SERIES_STM32H7X)
+	defined(CONFIG_SOC_SERIES_STM32H7X) || \
+	defined(CONFIG_SOC_SERIES_STM32L5X) || \
+	defined(CONFIG_SOC_SERIES_STM32U5X)
 
 	/*
 	 * In STM32L0 series, HSI48 requires VREFINT and its buffer
 	 * with 48 MHz RC to be enabled.
-	 * See ENREF_HSI48 in referenc maual RM0367 section10.2.3:
+	 * See ENREF_HSI48 in reference manual RM0367 section10.2.3:
 	 * "Reference control and status register (SYSCFG_CFGR3)"
 	 */
 #ifdef CONFIG_SOC_SERIES_STM32L0X
@@ -227,6 +232,11 @@ static int usb_dc_stm32_clock_enable(void)
 
 	LL_RCC_SetUSBClockSource(LL_RCC_USB_CLKSOURCE_HSI48);
 
+#ifdef CONFIG_SOC_SERIES_STM32U5X
+	/* VDDUSB independent USB supply (PWR clock is on) */
+	LL_PWR_EnableVDDUSB();
+#endif /* CONFIG_SOC_SERIES_STM32U5X */
+
 #if !defined(CONFIG_SOC_SERIES_STM32WBX)
 	/* Specially for STM32WB, don't unlock the HSEM to prevent M0 core
 	 * to disable HSI48 clock used for RNG.
@@ -241,7 +251,7 @@ static int usb_dc_stm32_clock_enable(void)
 	 * device. For now, we only use MSI for USB if not already used as
 	 * system clock source.
 	 */
-#if defined(CONFIG_CLOCK_STM32_MSI_PLL_MODE) && !defined(CONFIG_CLOCK_STM32_SYSCLK_SRC_MSI)
+#if STM32_MSI_PLL_MODE && !STM32_SYSCLK_SRC_MSI
 	LL_RCC_MSI_Enable();
 	while (!LL_RCC_MSI_IsReady()) {
 		/* Wait for MSI to become ready */
@@ -256,7 +266,7 @@ static int usb_dc_stm32_clock_enable(void)
 	} else {
 		LOG_ERR("Unable to set USB clock source to PLL.");
 	}
-#endif /* CONFIG_CLOCK_STM32_MSI_PLL_MODE && !CONFIG_CLOCK_STM32_SYSCLK_SRC_MSI */
+#endif /* STM32_MSI_PLL_MODE && !STM32_SYSCLK_SRC_MSI */
 
 #elif defined(RCC_CFGR_OTGFSPRE)
 	/* On STM32F105 and STM32F107 parts the USB OTGFSCLK is derived from
@@ -344,8 +354,12 @@ static int usb_dc_stm32_init(void)
 	HAL_StatusTypeDef status;
 	unsigned int i;
 
+#if defined(USB) || defined(USB_DRD_FS)
 #ifdef USB
 	usb_dc_stm32_state.pcd.Instance = USB;
+#else
+	usb_dc_stm32_state.pcd.Instance = USB_DRD_FS;
+#endif
 	usb_dc_stm32_state.pcd.Init.speed = PCD_SPEED_FULL;
 	usb_dc_stm32_state.pcd.Init.dev_endpoints = USB_NUM_BIDIR_ENDPOINTS;
 	usb_dc_stm32_state.pcd.Init.phy_itface = PCD_PHY_EMBEDDED;
@@ -399,9 +413,7 @@ static int usb_dc_stm32_init(void)
 #endif
 
 	LOG_DBG("Pinctrl signals configuration");
-	status = stm32_dt_pinctrl_configure(usb_pinctrl,
-				     ARRAY_SIZE(usb_pinctrl),
-				     (uint32_t)usb_dc_stm32_state.pcd.Instance);
+	status = pinctrl_apply_state(usb_pcfg, PINCTRL_STATE_DEFAULT);
 	if (status < 0) {
 		LOG_ERR("USB pinctrl setup failed (%d)", status);
 		return status;
@@ -426,7 +438,7 @@ static int usb_dc_stm32_init(void)
 	usb_dc_stm32_state.in_ep_state[EP0_IDX].ep_mps = EP0_MPS;
 	usb_dc_stm32_state.in_ep_state[EP0_IDX].ep_type = EP_TYPE_CTRL;
 
-#ifdef USB
+#if defined(USB) || defined(USB_DRD_FS)
 	/* Start PMA configuration for the endpoints after the BTABLE. */
 	usb_dc_stm32_state.pma_offset = USB_BTABLE_SIZE;
 
@@ -628,7 +640,7 @@ int usb_dc_ep_configure(const struct usb_dc_ep_cfg_data * const ep_cfg)
 		ep_cfg->ep_addr, ep_state->ep_mps, ep_cfg->ep_mps,
 		ep_cfg->ep_type);
 
-#ifdef USB
+#if defined(USB) || defined(USB_DRD_FS)
 	if (ep_cfg->ep_mps > ep_state->ep_pma_buf_len) {
 		if (USB_RAM_SIZE <=
 		    (usb_dc_stm32_state.pma_offset + ep_cfg->ep_mps)) {
@@ -1042,8 +1054,7 @@ void HAL_PCD_SetupStageCallback(PCD_HandleTypeDef *hpcd)
 		ep_state->cb(EP0_OUT, USB_DC_EP_SETUP);
 
 		if (!(setup->wLength == 0U) &&
-		    !(REQTYPE_GET_DIR(setup->bmRequestType) ==
-		    REQTYPE_DIR_TO_HOST)) {
+		    usb_reqtype_is_to_device(setup)) {
 			usb_dc_ep_start_read(EP0_OUT,
 					     usb_dc_stm32_state.ep_buf[EP0_IDX],
 					     setup->wLength);
@@ -1088,7 +1099,7 @@ void HAL_PCD_DataInStageCallback(PCD_HandleTypeDef *hpcd, uint8_t epnum)
 	}
 }
 
-#if defined(USB) && defined(CONFIG_USB_DC_STM32_DISCONN_ENABLE)
+#if (defined(USB) || defined(USB_DRD_FS)) && defined(CONFIG_USB_DC_STM32_DISCONN_ENABLE)
 void HAL_PCDEx_SetConnectionState(PCD_HandleTypeDef *hpcd, uint8_t state)
 {
 	const struct device *usb_disconnect;

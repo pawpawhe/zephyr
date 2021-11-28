@@ -38,6 +38,7 @@ config MODEM_RECEIVER_MAX_CONTEXTS
 
 config MODEM_CONTEXT
 	bool "Modem context helper driver [EXPERIMENTAL]"
+	select EXPERIMENTAL
 	help
 	  This driver allows modem drivers to communicate with an interface
 	  using custom defined protocols. Driver doesn't inspect received data
@@ -132,6 +133,11 @@ config MODEM_SIM_NUMBERS
 	  Query the SIM card for the IMSI and ICCID identifiers. This
 	  can be disabled if the application does not use a SIM.
 
+config MODEM_CELL_INFO
+	bool "Enable querying for operator and cell info"
+	depends on MODEM_SHELL
+	help
+	  Query for numerical operator id, location area code and cell id.
 
 source "drivers/modem/Kconfig.ublox-sara-r4"
 source "drivers/modem/Kconfig.quectel-bg9x"

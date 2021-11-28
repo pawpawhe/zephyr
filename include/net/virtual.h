@@ -274,10 +274,10 @@ net_virtual_get_iface_capabilities(struct net_if *iface)
 }
 
 #define Z_NET_VIRTUAL_INTERFACE_INIT(node_id, dev_name, drv_name,	\
-				     init_fn, pm_control_fn, data, cfg, \
+				     init_fn, pm_action_cb, data, cfg, \
 				     prio, api, mtu)			\
 	Z_NET_DEVICE_INIT(node_id, dev_name, drv_name, init_fn,		\
-			  pm_control_fn, data, cfg, prio, api,		\
+			  pm_action_cb, data, cfg, prio, api,		\
 			  VIRTUAL_L2, NET_L2_GET_CTX_TYPE(VIRTUAL_L2),	\
 			  mtu)
 /** @endcond */
@@ -294,8 +294,8 @@ net_virtual_get_iface_capabilities(struct net_if *iface)
  * @param drv_name The name this instance of the driver exposes to
  * the system.
  * @param init_fn Address to the init function of the driver.
- * @param pm_control_fn Pointer to device_pm_control function.
- * Can be empty function (device_pm_control_nop) if not implemented.
+ * @param pm_action_cb Pointer to PM action callback.
+ * Can be NULL if not implemented.
  * @param data Pointer to the device's private data.
  * @param cfg The address to the structure containing the
  * configuration information for this instance of the driver.
@@ -306,10 +306,10 @@ net_virtual_get_iface_capabilities(struct net_if *iface)
  * This is the default value and its value can be tweaked at runtime.
  */
 #define NET_VIRTUAL_INTERFACE_INIT(dev_name, drv_name, init_fn,		\
-				   pm_control_fn,			\
+				   pm_action_cb,			\
 				   data, cfg, prio, api, mtu)		\
 	Z_NET_VIRTUAL_INTERFACE_INIT(DT_INVALID_NODE, dev_name,		\
-				     drv_name, init_fn, pm_control_fn,	\
+				     drv_name, init_fn, pm_action_cb,	\
 				     data, cfg, prio, api, mtu)
 
 /**

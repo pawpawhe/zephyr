@@ -13,7 +13,6 @@
 #define DEFAULT_RADIO_NODE DT_ALIAS(lora0)
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DEFAULT_RADIO_NODE, okay),
 	     "No default LoRa radio specified in DT");
-#define DEFAULT_RADIO DT_LABEL(DEFAULT_RADIO_NODE)
 
 #define MAX_DATA_LEN 255
 
@@ -21,18 +20,35 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DEFAULT_RADIO_NODE, okay),
 #include <logging/log.h>
 LOG_MODULE_REGISTER(lora_receive);
 
+void lora_receive_cb(const struct device *dev, uint8_t *data, uint16_t size,
+		     int16_t rssi, int8_t snr)
+{
+	static int cnt;
+
+	ARG_UNUSED(dev);
+	ARG_UNUSED(size);
+
+	LOG_INF("Received data: %s (RSSI:%ddBm, SNR:%ddBm)",
+		log_strdup(data), rssi, snr);
+
+	/* Stop receiving after 10 packets */
+	if (++cnt == 10) {
+		LOG_INF("Stopping packet receptions");
+		lora_recv_async(dev, NULL);
+	}
+}
+
 void main(void)
 {
-	const struct device *lora_dev;
+	const struct device *lora_dev = DEVICE_DT_GET(DEFAULT_RADIO_NODE);
 	struct lora_modem_config config;
 	int ret, len;
 	uint8_t data[MAX_DATA_LEN] = {0};
 	int16_t rssi;
 	int8_t snr;
 
-	lora_dev = device_get_binding(DEFAULT_RADIO);
-	if (!lora_dev) {
-		LOG_ERR("%s Device not found", DEFAULT_RADIO);
+	if (!device_is_ready(lora_dev)) {
+		LOG_ERR("%s Device not ready", lora_dev->name);
 		return;
 	}
 
@@ -50,7 +66,9 @@ void main(void)
 		return;
 	}
 
-	while (1) {
+	/* Receive 4 packets synchronously */
+	LOG_INF("Synchronous reception");
+	for (int i = 0; i < 4; i++) {
 		/* Block until data arrives */
 		len = lora_recv(lora_dev, data, MAX_DATA_LEN, K_FOREVER,
 				&rssi, &snr);
@@ -62,4 +80,9 @@ void main(void)
 		LOG_INF("Received data: %s (RSSI:%ddBm, SNR:%ddBm)",
 			log_strdup(data), rssi, snr);
 	}
+
+	/* Enable asynchronous reception */
+	LOG_INF("Asynchronous reception");
+	lora_recv_async(lora_dev, lora_receive_cb);
+	k_sleep(K_FOREVER);
 }

@@ -6,10 +6,12 @@
 /dts-v1/;
 
 #include <it8xxx2.dtsi>
+#include <it8xxx2-alts-map.dtsi>
 
 / {
 	model = "IT8XXX2 EV-Board";
-	compatible = "riscv, it8xxx2_evb";
+	compatible = "riscv,it8xxx2-evb";
+
 	chosen {
 		zephyr,console = &uart1;
 		zephyr,shell-uart = &uart1;
@@ -18,15 +20,10 @@
 		zephyr,flash = &flash0;
 		zephyr,flash-controller = &flashctrl;
 		zephyr,code-partition = &slot0_partition;
+		zephyr,keyboard-scan = &kscan0;
 	};
 };
 &adc0 {
-	status = "okay";
-};
-&gpiob {
-	status = "okay";
-};
-&gpiof {
 	status = "okay";
 };
 &i2c0 {
@@ -62,6 +59,29 @@
 	status = "okay";
 	current-speed = <460800>;
 	clock-frequency = <1804800>;
+};
+&ite_uart1_wrapper {
+	status = "okay";
+};
+&ite_uart2_wrapper {
+	status = "okay";
+};
+&pwm0 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C6>;
+	/*
+	 * If we need pwm output in ITE chip power saving mode,
+	 * then we should set frequency <=324Hz.
+	 */
+	pwm-output-frequency = <324>;
+};
+&pwm7 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C4>;
+	pwm-output-frequency = <30000>;
+};
+&kscan0 {
+	status = "okay";
 };
 &flash0 {
 	partitions {

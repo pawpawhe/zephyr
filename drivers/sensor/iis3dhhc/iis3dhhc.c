@@ -237,8 +237,7 @@ static const struct iis3dhhc_config iis3dhhc_config = {
 	.bus_init = iis3dhhc_spi_init,
 	.spi_conf.frequency = DT_INST_PROP(0, spi_max_frequency),
 	.spi_conf.operation = (SPI_OP_MODE_MASTER | SPI_MODE_CPOL |
-			       SPI_MODE_CPHA | SPI_WORD_SET(8) |
-			       SPI_LINES_SINGLE),
+			       SPI_MODE_CPHA | SPI_WORD_SET(8)),
 	.spi_conf.slave     = DT_INST_REG_ADDR(0),
 #if DT_INST_SPI_DEV_HAS_CS_GPIOS(0)
 	.gpio_cs_port	    = DT_INST_SPI_DEV_CS_GPIOS_LABEL(0),
@@ -253,6 +252,6 @@ static const struct iis3dhhc_config iis3dhhc_config = {
 #endif
 };
 
-DEVICE_DT_INST_DEFINE(0, iis3dhhc_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, iis3dhhc_init, NULL,
 		    &iis3dhhc_data, &iis3dhhc_config, POST_KERNEL,
 		    CONFIG_SENSOR_INIT_PRIORITY, &iis3dhhc_api_funcs);

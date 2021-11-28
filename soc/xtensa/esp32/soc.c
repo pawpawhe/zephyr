@@ -8,6 +8,7 @@
 #include "soc.h"
 #include <soc/rtc_cntl_reg.h>
 #include <soc/timer_group_reg.h>
+#include <drivers/interrupt_controller/intc_esp32.h>
 #include <xtensa/config/core-isa.h>
 #include <xtensa/corebits.h>
 
@@ -22,6 +23,9 @@
 #include "soc/cpu.h"
 #include "soc/gpio_periph.h"
 #include "esp_spi_flash.h"
+#include "esp_err.h"
+#include "esp32/spiram.h"
+#include "sys/printk.h"
 
 extern void z_cstart(void);
 
@@ -96,9 +100,29 @@ void __attribute__((section(".iram1"))) __start(void)
 	*wdt_rtc_protect = 0;
 #endif
 
-#if CONFIG_SOC_FLASH_ESP32
+#if CONFIG_ESP_SPIRAM
+	esp_err_t err = esp_spiram_init();
+
+	if (err != ESP_OK) {
+		printk("Failed to Initialize SPIRAM, aborting.\n");
+		abort();
+	}
+	esp_spiram_init_cache();
+	if (esp_spiram_get_size() < CONFIG_ESP_SPIRAM_SIZE) {
+		printk("SPIRAM size is less than configured size, aborting.\n");
+		abort();
+	}
+#endif
+
+/* Scheduler is not started at this point. Hence, guard functions
+ * must be initialized after esp_spiram_init_cache which internally
+ * uses guard functions. Setting guard functions before SPIRAM
+ * cache initialization will result in a crash.
+ */
+#if CONFIG_SOC_FLASH_ESP32 || CONFIG_ESP_SPIRAM
 	spi_flash_guard_set(&g_flash_guard_default_ops);
 #endif
+	esp_intr_initialize();
 	/* Start Zephyr */
 	z_cstart();
 
@@ -109,9 +133,9 @@ void __attribute__((section(".iram1"))) __start(void)
 int IRAM_ATTR arch_printk_char_out(int c)
 {
 	if (c == '\n') {
-		esp32_rom_uart_tx_one_char('\r');
+		esp_rom_uart_tx_one_char('\r');
 	}
-	esp32_rom_uart_tx_one_char(c);
+	esp_rom_uart_tx_one_char(c);
 	return 0;
 }
 
@@ -132,9 +156,9 @@ void IRAM_ATTR esp_restart_noos(void)
 	soc_ll_stall_core(other_core_id);
 
 	/* Flush any data left in UART FIFOs */
-	esp32_rom_uart_tx_wait_idle(0);
-	esp32_rom_uart_tx_wait_idle(1);
-	esp32_rom_uart_tx_wait_idle(2);
+	esp_rom_uart_tx_wait_idle(0);
+	esp_rom_uart_tx_wait_idle(1);
+	esp_rom_uart_tx_wait_idle(2);
 
 	/* Disable cache */
 	Cache_Read_Disable(0);

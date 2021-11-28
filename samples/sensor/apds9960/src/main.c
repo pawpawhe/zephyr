@@ -15,7 +15,7 @@
 K_SEM_DEFINE(sem, 0, 1);
 
 static void trigger_handler(const struct device *dev,
-			    struct sensor_trigger *trigger)
+			    const struct sensor_trigger *trigger)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(trigger);
@@ -77,14 +77,10 @@ void main(void)
 		       intensity.val1, pdata.val1);
 
 #ifdef CONFIG_PM_DEVICE
-		uint32_t p_state;
-
-		p_state = DEVICE_PM_LOW_POWER_STATE;
-		device_set_power_state(dev, p_state, NULL, NULL);
+		pm_device_action_run(dev, PM_DEVICE_ACTION_SUSPEND);
 		printk("set low power state for 2s\n");
 		k_sleep(K_MSEC(2000));
-		p_state = DEVICE_PM_ACTIVE_STATE;
-		device_set_power_state(dev, p_state, NULL, NULL);
+		pm_device_action_run(dev, PM_DEVICE_ACTION_RESUME);
 #endif
 	}
 }

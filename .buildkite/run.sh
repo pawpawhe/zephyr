@@ -24,6 +24,9 @@ function cleanup()
 	echo "--- ccache stats at finish"
 	ccache -s
 
+	# Cleanup on exit
+	rm -fr *
+
 	# disk usage
 	echo "--- disk usage at finish"
 	df -h
@@ -51,7 +54,7 @@ ccache -s
 
 
 if [ -n "${DAILY_BUILD}" ]; then
-   TWISTER_OPTIONS=" --inline-logs -N --build-only --all --retry-failed 3 -v "
+   TWISTER_OPTIONS=" --inline-logs -M -N --build-only --all --retry-failed 3 -v "
    echo "--- DAILY BUILD"
    west init -l .
    west update 1> west.update.log || west update 1> west.update-2.log

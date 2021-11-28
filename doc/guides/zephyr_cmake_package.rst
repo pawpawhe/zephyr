@@ -125,6 +125,8 @@ In this example ``my_first_app`` is a Zephyr workspace application.
           installed using ``west``
 
 
+.. _freestanding_application:
+
 Zephyr freestanding application
 ===============================
 
@@ -246,7 +248,6 @@ For example:
 
   .. code-block:: cmake
 
-     cmake_minimum_required(VERSION 3.13.1)
      find_package(Zephyr 2.2.0)
      project(app)
 
@@ -281,7 +282,6 @@ syntax may be used:
 
 .. code-block:: cmake
 
-   cmake_minimum_required(VERSION 3.13.1)
    find_package(Zephyr 2.a)
    project(app)
 
@@ -293,7 +293,6 @@ In this case, the application CMakeLists.txt could be written as:
 
 .. code-block:: cmake
 
-   cmake_minimum_required(VERSION 3.13.1)
    find_package(Zephyr 2.a EXACT)
    project(app)
 
@@ -301,7 +300,6 @@ In case no Zephyr is found which satisfies the version required, as example, the
 
 .. code-block:: cmake
 
-   cmake_minimum_required(VERSION 3.13.1)
    find_package(Zephyr 2.z)
    project(app)
 
@@ -361,8 +359,6 @@ A Zephyr preference list can be specified as:
 
 .. code-block:: cmake
 
-   cmake_minimum_required(VERSION 3.13.1)
-
    set(ZEPHYR_PREFER "zephyr-custom" "zephyr-vendor")
    find_package(Zephyr)
 
@@ -379,8 +375,6 @@ Zephyr. When testing is done, the ``zephyr-test`` folder can simply be removed.
 Such a CMakeLists.txt could look as:
 
 .. code-block:: cmake
-
-   cmake_minimum_required(VERSION 3.13.1)
 
    set(ZEPHYR_PREFER "zephyr-test")
    find_package(Zephyr)
@@ -452,6 +446,48 @@ A sample ``ZephyrBuildConfig.cmake`` can be seen below.
            get_filename_component(GNUARMEMB_TOOLCHAIN_PATH ${GNU_ARM_GCC}/../.. ABSOLUTE)
        endif()
    endif()
+
+Zephyr Build Configuration CMake package (Freestanding application)
+*******************************************************************
+
+The Zephyr Build Configuration CMake package can be located outside a Zephyr
+workspace, for example located with a :ref:`freestanding_application`.
+
+Create the build configuration as described in the previous section, and then
+refer to the location of your Zephyr Build Configuration CMake package using
+the CMake variable ``ZephyrBuildConfiguration_ROOT``.
+
+#. At the CMake command line, like this:
+
+   .. code-block:: console
+
+      cmake -DZephyrBuildConfiguration_ROOT=<path-to-build-config> ...
+
+#. At the top of your application's top level :file:`CMakeLists.txt`, like this:
+
+   .. code-block:: cmake
+
+      set(ZephyrBuildConfiguration_ROOT <path-to-build-config>)
+      find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+
+   If you choose this option, make sure to set the variable **before**  calling
+   ``find_package(Zephyr ...)``, as shown above.
+
+#. In a separate CMake script which is pre-loaded to populate the CMake cache,
+   like this:
+
+   .. code-block:: cmake
+
+      # Put this in a file with a name like "zephyr-settings.cmake"
+      set(ZephyrBuildConfiguration_ROOT <path-to-build-config>
+          CACHE STRING "pre-cached build config"
+      )
+
+   You can tell the build system to use this file by adding ``-C
+   zephyr-settings.cmake`` to your CMake command line.
+   This principle is useful when not using ``west`` as both this setting and
+   Zephyr modules can be specified using the same file.
+   See Zephyr module :ref:`modules_without_west`.
 
 Zephyr CMake package source code
 ********************************

@@ -109,7 +109,7 @@ struct npcx_vw_out_config {
 
 /*
  * eSPI VW input/Output signal configuration tables. Please refer
- * npcx7-espi-vws-map.dtsi device tree file for more detail.
+ * npcxn-espi-vws-map.dtsi device tree file for more detail.
  */
 static const struct npcx_vw_in_config vw_in_tbl[] = {
 	/* index 02h (In)  */
@@ -843,7 +843,7 @@ static const struct espi_npcx_config espi_npcx_config = {
 	.alts_list = espi_alts,
 };
 
-DEVICE_DT_INST_DEFINE(0, &espi_npcx_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, &espi_npcx_init, NULL,
 		    &espi_npcx_data, &espi_npcx_config,
 		    PRE_KERNEL_2, CONFIG_ESPI_INIT_PRIORITY,
 		    &espi_npcx_driver_api);
@@ -853,8 +853,13 @@ static int espi_npcx_init(const struct device *dev)
 	const struct espi_npcx_config *const config = DRV_CONFIG(dev);
 	struct espi_npcx_data *const data = DRV_DATA(dev);
 	struct espi_reg *const inst = HAL_INSTANCE(dev);
-	const struct device *clk_dev = device_get_binding(NPCX_CLK_CTRL_NAME);
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	int i, ret;
+
+	/* If booter doesn't set the host interface type */
+	if (!NPCX_BOOTER_IS_HIF_TYPE_SET()) {
+		npcx_host_interface_sel(NPCX_HIF_TYPE_ESPI_SHI);
+	}
 
 	/* Turn on eSPI device clock first */
 	ret = clock_control_on(clk_dev, (clock_control_subsys_t *)

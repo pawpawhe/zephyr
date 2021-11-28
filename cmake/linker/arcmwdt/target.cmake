@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+set_property(TARGET linker PROPERTY devices_start_symbol "__device_start")
 
 find_program(CMAKE_LINKER ${CROSS_COMPILE}lldac PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
 
@@ -9,6 +10,8 @@ set_ifndef(LINKERFLAGPREFIX -Wl,)
 # NOTE: ${linker_script_gen} will be produced at build-time; not at configure-time
 macro(configure_linker_script linker_script_gen linker_pass_define)
   set(extra_dependencies ${ARGN})
+  set(template_script_defines ${linker_pass_define})
+  list(TRANSFORM template_script_defines PREPEND "-D")
 
   # Different generators deal with depfiles differently.
   if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
@@ -35,6 +38,7 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
     OUTPUT ${linker_script_gen}
     DEPENDS
     ${LINKER_SCRIPT}
+    ${AUTOCONF_H}
     ${extra_dependencies}
     # NB: 'linker_script_dep' will use a keyword that ends 'DEPENDS'
     ${linker_script_dep}
@@ -45,9 +49,10 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
     -MD -MF ${linker_script_gen}.dep -MT ${base_name}/${linker_script_gen}
     -D_LINKER
     -D_ASMLANGUAGE
+    -imacros ${AUTOCONF_H}
     ${current_includes}
     ${current_defines}
-    ${linker_pass_define}
+    ${template_script_defines}
     ${LINKER_SCRIPT}
     -E
     -o ${linker_script_gen}
@@ -110,14 +115,26 @@ macro(toolchain_ld_baremetal)
   zephyr_ld_options(
     -Hlld
     -Hnosdata
-    -Hnocrt
     -Xtimer0 # to suppress the warning message
     -Hnoxcheck_obj
     -Hnocplus
-    -Hcl
+    -Hhostlib=
     -Hheap=0
     -Hnoivt
+    -Hnocrt
   )
+
+  # There are two options:
+  # - We have full MWDT libc support and we link MWDT libc - this is default
+  #   behavior and we don't need to do something for that.
+  # - We use minimal libc provided by Zephyr itself. In that case we must not
+  #   link MWDT libc, but we still need to link libmw
+  if(CONFIG_MINIMAL_LIBC)
+    zephyr_ld_options(
+      -Hnolib
+      -Hldopt=-lmw
+    )
+  endif()
 
   # Funny thing is if this is set to =error, some architectures will
   # skip this flag even though the compiler flag check passes
@@ -178,7 +195,7 @@ endmacro()
 # link C++ libraries
 macro(toolchain_ld_cpp)
   zephyr_link_libraries(
-    -Hcppmw -Hcplus
+    -Hcplus
   )
 endmacro()
 

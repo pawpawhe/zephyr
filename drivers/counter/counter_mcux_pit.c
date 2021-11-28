@@ -33,7 +33,14 @@ static uint32_t mcux_pit_get_top_value(const struct device *dev)
 	const struct mcux_pit_config *config = dev->config;
 	pit_chnl_t channel = config->pit_channel;
 
-	return config->base->CHANNEL[channel].LDVAL;
+	/*
+	 * According to RM, the LDVAL trigger = clock ticks -1
+	 * The underlying HAL driver function PIT_SetTimerPeriod()
+	 * automatically subtracted 1 from the value that ends up in
+	 * LDVAL so for reporting purposes we need to add it back in
+	 * here to by consistent.
+	 */
+	return (config->base->CHANNEL[channel].LDVAL + 1);
 }
 
 static int mcux_pit_start(const struct device *dev)
@@ -225,9 +232,9 @@ static const struct mcux_pit_config mcux_pit_config_0 = {
 	.irq_config_func = mcux_pit_irq_config_0,
 };
 
-DEVICE_DT_INST_DEFINE(0, &mcux_pit_init, device_pm_control_nop,
+DEVICE_DT_INST_DEFINE(0, &mcux_pit_init, NULL,
 		    &mcux_pit_data_0, &mcux_pit_config_0, POST_KERNEL,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &mcux_pit_driver_api);
+		    CONFIG_COUNTER_INIT_PRIORITY, &mcux_pit_driver_api);
 
 static void mcux_pit_irq_config_0(const struct device *dev)
 {

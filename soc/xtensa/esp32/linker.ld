@@ -24,53 +24,6 @@
 #define IRAM_REGION iram0_0_seg :iram0_0_phdr
 #define FLASH_CODE_REGION irom0_0_seg :irom0_0_phdr
 
-PROVIDE ( __stack = 0x3ffe3f20 );
-
-/* Global symbols required for espressif hal build */
-PROVIDE ( ets_printf = 0x40007d54 );
-PROVIDE ( intr_matrix_set = 0x4000681c );
-PROVIDE ( g_ticks_per_us_app = 0x3ffe40f0 );
-PROVIDE ( g_ticks_per_us_pro = 0x3ffe01e0 );
-PROVIDE ( ets_delay_us = 0x40008534 );
-PROVIDE ( gpio_output_set = 0x40009b24 );
-PROVIDE ( gpio_output_set_high = 0x40009b5c );
-PROVIDE ( roundup2 = 0x4000ab7c );
-PROVIDE ( crc32_le = 0x4005cfec );
-PROVIDE ( Cache_Read_Disable_rom = 0x40009ab8 );
-PROVIDE ( Cache_Read_Enable_rom = 0x40009a84 );
-PROVIDE ( Cache_Read_Init_rom = 0x40009950 );
-PROVIDE ( phy_get_romfuncs = 0x40004100 );
-PROVIDE ( esp_rom_spiflash_read_user_cmd = 0x400621b0 );
-PROVIDE ( g_rom_spiflash_dummy_len_plus = 0x3ffae290 );
-PROVIDE ( g_rom_flashchip = 0x3ffae270 );
-PROVIDE ( SPI0 = 0x3ff43000 );
-PROVIDE ( SPI1 = 0x3ff42fff );
-PROVIDE ( SPI2 = 0x3ff64fff );
-PROVIDE ( SPI3 = 0x3ff65fff );
-
-PROVIDE ( esp32_rom_uart_tx_one_char = 0x40009200 );
-PROVIDE ( esp32_rom_uart_rx_one_char = 0x400092d0 );
-PROVIDE ( esp32_rom_uart_attach = 0x40008fd0 );
-PROVIDE ( esp32_rom_uart_tx_wait_idle = 0x40009278 );
-PROVIDE ( esp32_rom_intr_matrix_set = intr_matrix_set );
-PROVIDE ( esp32_rom_gpio_matrix_in = 0x40009edc );
-PROVIDE ( esp32_rom_gpio_matrix_out = 0x40009f0c );
-PROVIDE ( esp32_rom_Cache_Flush = 0x40009a14 );
-PROVIDE ( esp32_rom_Cache_Read_Enable = 0x40009a84 );
-PROVIDE ( esp32_rom_ets_set_appcpu_boot_addr = 0x4000689c );
-PROVIDE ( esp32_rom_i2c_readReg = 0x40004148 );
-PROVIDE ( esp32_rom_i2c_writeReg = 0x400041a4 );
-PROVIDE ( esp32_rom_ets_printf = ets_printf );
-PROVIDE ( esp32_rom_g_ticks_per_us_app = g_ticks_per_us_app );
-PROVIDE ( esp32_rom_g_ticks_per_us_pro = g_ticks_per_us_app );
-PROVIDE ( esp32_rom_ets_delay_us = ets_delay_us );
-PROVIDE ( TIMERG0 = 0x3ff5F000 );
-PROVIDE ( TIMERG1 = 0x3ff60000 );
-
-/* __udivdi3 is exported using assignment, which declares strong symbols */
-__udivdi3 = 0x4000cff8;
-__umoddi3 = 0x4000d280;
-
 MEMORY
 {
   iram0_0_seg(RX): org = 0x40080000, len = 0x20000
@@ -86,13 +39,15 @@ MEMORY
    *
    * FIXME:
    *  - Utilize available memory regions to full capacity
-   *  - Reserve memory region for BT controller library from ROM
    */
-  dram0_0_seg(RW): org = 0x3FFB0000, len = 0x30000
+  dram0_0_seg(RW): org = 0x3FFB0000 + CONFIG_ESP32_BT_RESERVE_DRAM, len = 0x2c200 - CONFIG_ESP32_BT_RESERVE_DRAM
   dram0_1_seg(RW): org = 0x3FFE4350, len = 0x1BCB0
   drom0_0_seg(R): org = 0x3F400020, len = 0x400000-0x20
   rtc_iram_seg(RWX): org = 0x400C0000, len = 0x2000
   rtc_slow_seg(RW): org = 0x50000000, len = 0x1000
+#if defined(CONFIG_ESP_SPIRAM)
+  ext_ram_seg(RW): org = 0x3F800000, len = CONFIG_ESP_SPIRAM_SIZE
+#endif
 #ifdef CONFIG_GEN_ISR_TABLES
   IDT_LIST(RW): org = 0x3ebfe010, len = 0x2000
 #endif
@@ -226,33 +181,36 @@ SECTIONS
     KEEP(*(SORT_BY_NAME("._net_buf_pool.static.*")))
 
 #if defined(CONFIG_NETWORKING)
-    . = ALIGN(4);
-    Z_LINK_ITERABLE(net_if);
-    . = ALIGN(4);
-    Z_LINK_ITERABLE(net_if_dev);
-    . = ALIGN(4);
-    Z_LINK_ITERABLE(net_l2);
+    Z_LINK_ITERABLE_ALIGNED(net_if, 4);
+    Z_LINK_ITERABLE_ALIGNED(net_if_dev, 4);
+    Z_LINK_ITERABLE_ALIGNED(net_l2, 4);
 #endif
 
   } GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
-  Z_ITERABLE_SECTION_RAM(_static_thread_data, 4)
+  ITERABLE_SECTION_RAM(_static_thread_data, 4)
 
-#pragma push_macro("Z_ITERABLE_SECTION_RAM")
-#pragma push_macro("Z_ITERABLE_SECTION_RAM_GC_ALLOWED")
-#undef Z_ITERABLE_SECTION_RAM_GC_ALLOWED
-#define Z_ITERABLE_SECTION_RAM_GC_ALLOWED(x, y)
-#undef Z_ITERABLE_SECTION_RAM
-#define Z_ITERABLE_SECTION_RAM(x, y)
+#pragma push_macro("ITERABLE_SECTION_RAM")
+#pragma push_macro("ITERABLE_SECTION_RAM_GC_ALLOWED")
+#undef ITERABLE_SECTION_RAM_GC_ALLOWED
+#define ITERABLE_SECTION_RAM_GC_ALLOWED(x, y)
+#undef ITERABLE_SECTION_RAM
+#define ITERABLE_SECTION_RAM(x, y)
 #include <linker/common-ram.ld>
 /* Restore original value for symbols referenced by `common-ram.ld` */
 _net_buf_pool_list = _esp_net_buf_pool_list;
-#pragma pop_macro("Z_ITERABLE_SECTION_RAM_GC_ALLOWED")
-#pragma pop_macro("Z_ITERABLE_SECTION_RAM")
+#pragma pop_macro("ITERABLE_SECTION_RAM_GC_ALLOWED")
+#pragma pop_macro("ITERABLE_SECTION_RAM")
 
   .dram0.data :
   {
     _data_start = ABSOLUTE(.);
+
+    _btdm_data_start = ABSOLUTE(.);
+    *libbtdm_app.a:(.data .data.*)
+    . = ALIGN (4);
+    _btdm_data_end = ABSOLUTE(.);
+
     *(.data)
     *(.data.*)
     *(.gnu.linkonce.d.*)
@@ -292,24 +250,74 @@ _net_buf_pool_list = _esp_net_buf_pool_list;
     . = ALIGN(4);
   } GROUP_LINK_IN(RAMABLE_REGION)
 
+#if defined(CONFIG_ESP_SPIRAM)
+  .ext_ram.bss (NOLOAD):
+  {
+    _ext_ram_data_start = ABSOLUTE(.);
+    *(.ext_ram.bss*)
+    _ext_ram_data_end = ABSOLUTE(.) + CONFIG_ESP_SPIRAM_SIZE;
+  } > ext_ram_seg
+#endif
+
  SECTION_PROLOGUE(_RODATA_SECTION_NAME,,ALIGN(20))
   {
     _rodata_start = ABSOLUTE(.);
+
+#ifdef CONFIG_USERSPACE
+    Z_LINK_ITERABLE_ALIGNED(z_object_assignment, 4);
+#endif
+
 #if defined(CONFIG_NET_SOCKETS)
-    . = ALIGN(4);
-    Z_LINK_ITERABLE(net_socket_register);
-    . = ALIGN(4);
+    Z_LINK_ITERABLE_ALIGNED(net_socket_register, 4);
+#endif
+
+#if defined(CONFIG_NET_L2_PPP)
+    Z_LINK_ITERABLE_ALIGNED(ppp_protocol_handler, 4);
+#endif
+
+    Z_LINK_ITERABLE_ALIGNED(bt_l2cap_fixed_chan, 4);
+
+#if defined(CONFIG_BT_BREDR)
+    Z_LINK_ITERABLE_ALIGNED(bt_l2cap_br_fixed_chan, 4);
+#endif
+
+#if defined(CONFIG_BT_CONN)
+    Z_LINK_ITERABLE_ALIGNED(bt_conn_cb, 4)
+#endif
+
+    Z_LINK_ITERABLE_ALIGNED(bt_gatt_service_static, 4);
+
+#if defined(CONFIG_BT_MESH)
+    Z_LINK_ITERABLE_ALIGNED(bt_mesh_subnet_cb, 4);
+    Z_LINK_ITERABLE_ALIGNED(bt_mesh_app_key_cb, 4);
+    Z_LINK_ITERABLE_ALIGNED(bt_mesh_hb_cb, 4);
+#endif
+
+#if defined(CONFIG_BT_MESH_FRIEND)
+    Z_LINK_ITERABLE_ALIGNED(bt_mesh_friend_cb, 4);
+#endif
+
+#if defined(CONFIG_BT_MESH_LOW_POWER)
+    Z_LINK_ITERABLE_ALIGNED(bt_mesh_lpn_cb, 4);
+#endif
+
+#if defined(CONFIG_BT_MESH_PROXY)
+    Z_LINK_ITERABLE_ALIGNED(bt_mesh_proxy_cb, 4);
+#endif
+
+#if defined(CONFIG_EC_HOST_CMD)
+    Z_LINK_ITERABLE_ALIGNED(ec_host_cmd_handler, 4);
 #endif
 
 #if defined(CONFIG_SETTINGS)
-    . = ALIGN(4);
-    Z_LINK_ITERABLE(settings_handler_static);
-    . = ALIGN(4);
+    Z_LINK_ITERABLE_ALIGNED(settings_handler_static, 4);
 #endif
 
-    . = ALIGN(4);
-    Z_LINK_ITERABLE(shell);
-    . = ALIGN(4);
+    Z_LINK_ITERABLE_ALIGNED(k_p4wq_initparam, 4);
+
+    Z_LINK_ITERABLE_ALIGNED(shell, 4);
+
+    Z_LINK_ITERABLE_ALIGNED(tracing_backend, 4)
 
     __esp_shell_root_cmds_start = .;
     KEEP(*(SORT(.shell_root_cmd_*)));
@@ -347,10 +355,10 @@ _net_buf_pool_list = _esp_net_buf_pool_list;
     _rodata_end = ABSOLUTE(.);
   } GROUP_LINK_IN(ROMABLE_REGION)
 
-#pragma push_macro("Z_ITERABLE_SECTION_ROM")
+#pragma push_macro("ITERABLE_SECTION_ROM")
 #pragma push_macro("ROMABLE_REGION")
-#undef Z_ITERABLE_SECTION_ROM
-#define Z_ITERABLE_SECTION_ROM(x,y)
+#undef ITERABLE_SECTION_ROM
+#define ITERABLE_SECTION_ROM(x,y)
 #undef ROMABLE_REGION
 /* This is to workaround limitation of `esptool` which needs single `FLASH` data segment
  * which is already defined above. In case, `common-rom.ld` creates additional segments
@@ -365,7 +373,7 @@ __log_backends_end = __esp_log_backends_end;
 __shell_root_cmds_start = __esp_shell_root_cmds_start;
 __shell_root_cmds_end = __esp_shell_root_cmds_end;
 #pragma pop_macro("ROMABLE_REGION")
-#pragma pop_macro("Z_ITERABLE_SECTION_ROM")
+#pragma pop_macro("ITERABLE_SECTION_ROM")
 
   SECTION_PROLOGUE(_TEXT_SECTION_NAME, , ALIGN(4))
   {
@@ -383,32 +391,52 @@ __shell_root_cmds_end = __esp_shell_root_cmds_end;
     *libkernel.a:(.literal .text .literal.* .text.*)
     *libsoc.a:rtc_*.*(.literal .text .literal.* .text.*)
     *libsoc.a:cpu_util.*(.literal .text .literal.* .text.*)
-    *libhal.a:(.literal .text .literal.* .text.*)
     *libgcc.a:lib2funcs.*(.literal .text .literal.* .text.*)
     *libdrivers__flash.a:flash_esp32.*(.literal .text .literal.* .text.*)
+    *libzephyr.a:windowspill_asm.*(.literal .text .literal.* .text.*)
     *libzephyr.a:log_noos.*(.literal .text .literal.* .text.*)
-    *libzephyr.a:xtensa_sys_timer.*(.literal .text .literal.* .text.*)
+    *libdrivers__timer.a:xtensa_sys_timer.*(.literal .text .literal.* .text.*)
     *libzephyr.a:log_core.*(.literal .text .literal.* .text.*)
     *libzephyr.a:cbprintf_complete.*(.literal .text .literal.* .text.*)
     *libzephyr.a:printk.*(.literal.printk .literal.vprintk .literal.char_out .text.printk .text.vprintk .text.char_out)
     *libzephyr.a:log_msg.*(.literal .text .literal.* .text.*)
     *libzephyr.a:log_list.*(.literal .text .literal.* .text.*)
-    *libzephyr.a:uart_console.*(.literal.console_out .text.console_out)
+    *libdrivers__console.a:uart_console.*(.literal.console_out .text.console_out)
     *libzephyr.a:log_output.*(.literal .text .literal.* .text.*)
     *libzephyr.a:log_backend_uart.*(.literal .text .literal.* .text.*)
     *liblib__libc__minimal.a:string.*(.literal .text .literal.* .text.*)
+    *libphy.a:( .phyiram .phyiram.*)
     *libgcov.a:(.literal .text .literal.* .text.*)
-    *libnet80211.a:( .wifi0iram  .wifi0iram.*)
-    *libpp.a:( .wifi0iram  .wifi0iram.*)
-    *libnet80211.a:( .wifirxiram  .wifirxiram.*)
-    *libpp.a:( .wifirxiram  .wifirxiram.*)
+
+#if defined(CONFIG_ESP32_WIFI_IRAM_OPT)
+    *libnet80211.a:( .wifi0iram  .wifi0iram.* .wifislpiram .wifislpiram.*)
+    *libpp.a:( .wifi0iram  .wifi0iram.* .wifislpiram .wifislpiram.*)
+#endif
+
+#if defined(CONFIG_ESP32_WIFI_RX_IRAM_OPT)
+    *libnet80211.a:( .wifirxiram  .wifirxiram.* .wifislprxiram .wifislprxiram.*)
+    *libpp.a:( .wifirxiram  .wifirxiram.* .wifislprxiram .wifislprxiram.*)
+#endif
+
     _iram_text_end = ABSOLUTE(.);
+    . = ALIGN(4);
+    _iram_end = ABSOLUTE(.);
   } GROUP_LINK_IN(IRAM_REGION)
 
   .flash.text :
   {
     _stext = .;
     _text_start = ABSOLUTE(.);
+
+#if !defined(CONFIG_ESP32_WIFI_IRAM_OPT)
+    *libnet80211.a:( .wifi0iram  .wifi0iram.* .wifislpiram .wifislpiram.*)
+    *libpp.a:( .wifi0iram  .wifi0iram.* .wifislpiram .wifislpiram.*)
+#endif
+
+#if !defined(CONFIG_ESP32_WIFI_RX_IRAM_OPT)
+    *libnet80211.a:( .wifirxiram  .wifirxiram.* .wifislprxiram .wifislprxiram.*)
+    *libpp.a:( .wifirxiram  .wifirxiram.* .wifislprxiram .wifislprxiram.*)
+#endif
 
     *(.literal .text .literal.* .text.*)
     _text_end = ABSOLUTE(.);
@@ -426,6 +454,15 @@ __shell_root_cmds_end = __esp_shell_root_cmds_end;
   {
     . = ALIGN (8);
     _bss_start = ABSOLUTE(.);
+
+    _btdm_bss_start = ABSOLUTE(.);
+    *libbtdm_app.a:(.bss .bss.* COMMON)
+    . = ALIGN (4);
+    _btdm_bss_end = ABSOLUTE(.);
+
+    /* Buffer for system heap should be placed in dram0_0_seg */
+    *libkernel.a:mempool.*(.noinit.kheap_buf__system_heap .noinit.*.kheap_buf__system_heap)
+
     *(.dynsbss)
     *(.sbss)
     *(.sbss.*)
@@ -444,13 +481,15 @@ __shell_root_cmds_end = __esp_shell_root_cmds_end;
     _bss_end = ABSOLUTE(.);
   } GROUP_LINK_IN(RAMABLE_REGION)
 
+  ASSERT(((_bss_end - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)),
+          "DRAM segment data does not fit.")
+
   SECTION_DATA_PROLOGUE(_NOINIT_SECTION_NAME, (NOLOAD),)
   {
     . = ALIGN (8);
     *(.noinit)
     *(".noinit.*")
     . = ALIGN (8);
-    _heap_start = ABSOLUTE(.);
   } GROUP_LINK_IN(RAMABLE_REGION_1)
 
 #ifdef CONFIG_GEN_ISR_TABLES
@@ -465,3 +504,6 @@ __shell_root_cmds_end = __esp_shell_root_cmds_end;
   }
 
 }
+
+ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
+          "IRAM0 segment data does not fit.")

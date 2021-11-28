@@ -359,9 +359,9 @@ static struct gpio_sifive_data gpio_sifive_data0;
 
 DEVICE_DT_INST_DEFINE(0,
 		    gpio_sifive_init,
-		    device_pm_control_nop,
+		    NULL,
 		    &gpio_sifive_data0, &gpio_sifive_config0,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		    POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY,
 		    &gpio_sifive_driver);
 
 #define		IRQ_INIT(n)					\

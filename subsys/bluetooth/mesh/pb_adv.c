@@ -1,5 +1,3 @@
-/*  Bluetooth Mesh */
-
 /*
  * Copyright (c) 2017 Intel Corporation
  * Copyright (c) 2020 Nordic Semiconductor ASA
@@ -16,6 +14,7 @@
 #include "adv.h"
 #include "crypto.h"
 #include "beacon.h"
+#include "host/ecc.h"
 #include "prov.h"
 
 #define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_MESH_DEBUG_PROV)
@@ -54,10 +53,10 @@
 /* Acked messages, will do retransmissions manually, taking acks into account:
  */
 #define RETRANSMITS_RELIABLE   0
-/* Unacked messages: */
-#define RETRANSMITS_UNRELIABLE 2
 /* PDU acks: */
 #define RETRANSMITS_ACK        2
+/* Link close retransmits: */
+#define RETRANSMITS_LINK_CLOSE 2
 
 enum {
 	ADV_LINK_ACTIVE,    	/* Link has been opened */
@@ -104,11 +103,11 @@ struct pb_adv {
 		void *cb_data;
 
 		/* Retransmit timer */
-		struct k_delayed_work retransmit;
+		struct k_work_delayable retransmit;
 	} tx;
 
 	/* Protocol timeout */
-	struct k_delayed_work prot_timer;
+	struct k_work_delayable prot_timer;
 };
 
 struct prov_rx {
@@ -126,17 +125,25 @@ static void link_open(struct prov_rx *rx, struct net_buf_simple *buf);
 static void link_ack(struct prov_rx *rx, struct net_buf_simple *buf);
 static void link_close(struct prov_rx *rx, struct net_buf_simple *buf);
 static void prov_link_close(enum prov_bearer_link_status status);
+static void close_link(enum prov_bearer_link_status status);
 
 static void buf_sent(int err, void *user_data)
 {
-	if (!link.tx.buf[0]) {
+	if (atomic_test_and_clear_bit(link.flags, ADV_LINK_CLOSING)) {
+		close_link(PROV_BEARER_LINK_STATUS_SUCCESS);
 		return;
 	}
+}
 
-	k_delayed_work_submit(&link.tx.retransmit, RETRANSMIT_TIMEOUT);
+static void buf_start(uint16_t duration, int err, void *user_data)
+{
+	if (err) {
+		buf_sent(err, user_data);
+	}
 }
 
 static struct bt_mesh_send_cb buf_sent_cb = {
+	.start = buf_start,
 	.end = buf_sent,
 };
 
@@ -178,7 +185,12 @@ static void prov_clear_tx(void)
 {
 	BT_DBG("");
 
-	k_delayed_work_cancel(&link.tx.retransmit);
+	/* If this fails, the work handler will not find any buffers to send,
+	 * and return without rescheduling. The work handler also checks the
+	 * LINK_ACTIVE flag, so if this call is part of reset_adv_link, it'll
+	 * exit early.
+	 */
+	(void)k_work_cancel_delayable(&link.tx.retransmit);
 
 	free_segments();
 }
@@ -188,7 +200,10 @@ static void reset_adv_link(void)
 	BT_DBG("");
 	prov_clear_tx();
 
-	k_delayed_work_cancel(&link.prot_timer);
+	/* If this fails, the work handler will exit early on the LINK_ACTIVE
+	 * check.
+	 */
+	(void)k_work_cancel_delayable(&link.prot_timer);
 
 	if (atomic_test_bit(link.flags, ADV_PROVISIONER)) {
 		/* Clear everything except the retransmit and protocol timer
@@ -253,7 +268,7 @@ static void prov_failed(uint8_t err)
 
 static void prov_msg_recv(void)
 {
-	k_delayed_work_submit(&link.prot_timer, PROTOCOL_TIMEOUT);
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
 
 	if (!bt_mesh_fcs_check(link.rx.buf, link.rx.fcs)) {
 		BT_ERR("Incorrect FCS");
@@ -274,6 +289,10 @@ static void prov_msg_recv(void)
 
 static void protocol_timeout(struct k_work *work)
 {
+	if (!atomic_test_bit(link.flags, ADV_LINK_ACTIVE)) {
+		return;
+	}
+
 	BT_DBG("");
 
 	link.rx.seg = 0U;
@@ -548,57 +567,6 @@ static void send_reliable(void)
 {
 	int i;
 
-	link.tx.start = k_uptime_get();
-
-	for (i = 0; i < ARRAY_SIZE(link.tx.buf); i++) {
-		struct net_buf *buf = link.tx.buf[i];
-
-		if (!buf) {
-			break;
-		}
-
-		if (i + 1 < ARRAY_SIZE(link.tx.buf) && link.tx.buf[i + 1]) {
-			bt_mesh_adv_send(buf, NULL, NULL);
-		} else {
-			bt_mesh_adv_send(buf, &buf_sent_cb, NULL);
-		}
-	}
-}
-
-static void prov_retransmit(struct k_work *work)
-{
-	int32_t timeout_ms;
-	int i;
-
-	BT_DBG("");
-
-	if (!atomic_test_bit(link.flags, ADV_LINK_ACTIVE)) {
-		BT_WARN("Link not active");
-		return;
-	}
-
-	/*
-	 * According to mesh profile spec (5.3.1.4.3), the close message should
-	 * be restransmitted at least three times. Retransmit the link_close
-	 * message until CLOSING_TIMEOUT has elapsed.
-	 */
-	if (atomic_test_bit(link.flags, ADV_LINK_CLOSING)) {
-		timeout_ms = CLOSING_TIMEOUT;
-	} else {
-		timeout_ms = TRANSACTION_TIMEOUT;
-	}
-
-	if (k_uptime_get() - link.tx.start > timeout_ms) {
-		if (atomic_test_bit(link.flags, ADV_LINK_CLOSING)) {
-			close_link(PROV_BEARER_LINK_STATUS_SUCCESS);
-		} else {
-			BT_WARN("Giving up transaction");
-			prov_link_close(PROV_BEARER_LINK_STATUS_FAIL);
-		}
-
-		return;
-	}
-
 	for (i = 0; i < ARRAY_SIZE(link.tx.buf); i++) {
 		struct net_buf *buf = link.tx.buf[i];
 
@@ -612,28 +580,40 @@ static void prov_retransmit(struct k_work *work)
 
 		BT_DBG("%u bytes: %s", buf->len, bt_hex(buf->data, buf->len));
 
-		if (i + 1 < ARRAY_SIZE(link.tx.buf) && link.tx.buf[i + 1]) {
-			bt_mesh_adv_send(buf, NULL, NULL);
-		} else {
-			bt_mesh_adv_send(buf, &buf_sent_cb, NULL);
-		}
+		bt_mesh_adv_send(buf, NULL, NULL);
 	}
+
+	k_work_reschedule(&link.tx.retransmit, RETRANSMIT_TIMEOUT);
 }
 
-static int bearer_ctl_send(uint8_t op, const void *data, uint8_t data_len,
-			   bool reliable)
+static void prov_retransmit(struct k_work *work)
+{
+	BT_DBG("");
+
+	if (!atomic_test_bit(link.flags, ADV_LINK_ACTIVE)) {
+		BT_WARN("Link not active");
+		return;
+	}
+
+	if (k_uptime_get() - link.tx.start > TRANSACTION_TIMEOUT) {
+		BT_WARN("Giving up transaction");
+		prov_link_close(PROV_BEARER_LINK_STATUS_FAIL);
+		return;
+	}
+
+	send_reliable();
+}
+
+static struct net_buf *ctl_buf_create(uint8_t op, const void *data, uint8_t data_len,
+				      uint8_t retransmits)
 {
 	struct net_buf *buf;
 
 	BT_DBG("op 0x%02x data_len %u", op, data_len);
 
-	prov_clear_tx();
-	k_delayed_work_submit(&link.prot_timer, PROTOCOL_TIMEOUT);
-
-	buf = adv_buf_create(reliable ? RETRANSMITS_RELIABLE :
-					RETRANSMITS_UNRELIABLE);
+	buf = adv_buf_create(retransmits);
 	if (!buf) {
-		return -ENOBUFS;
+		return NULL;
 	}
 
 	net_buf_add_be32(buf, link.id);
@@ -642,13 +622,36 @@ static int bearer_ctl_send(uint8_t op, const void *data, uint8_t data_len,
 	net_buf_add_u8(buf, GPC_CTL(op));
 	net_buf_add_mem(buf, data, data_len);
 
-	if (reliable) {
-		link.tx.buf[0] = buf;
-		send_reliable();
-	} else {
-		bt_mesh_adv_send(buf, &buf_sent_cb, NULL);
-		net_buf_unref(buf);
+	return buf;
+}
+
+static int bearer_ctl_send(struct net_buf *buf)
+{
+	if (!buf) {
+		return -ENOMEM;
 	}
+
+	prov_clear_tx();
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
+
+	link.tx.start = k_uptime_get();
+	link.tx.buf[0] = buf;
+	send_reliable();
+
+	return 0;
+}
+
+static int bearer_ctl_send_unacked(struct net_buf *buf)
+{
+	if (!buf) {
+		return -ENOMEM;
+	}
+
+	prov_clear_tx();
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
+
+	bt_mesh_adv_send(buf, &buf_sent_cb, NULL);
+	net_buf_unref(buf);
 
 	return 0;
 }
@@ -660,7 +663,7 @@ static int prov_send_adv(struct net_buf_simple *msg,
 	uint8_t seg_len, seg_id;
 
 	prov_clear_tx();
-	k_delayed_work_submit(&link.prot_timer, PROTOCOL_TIMEOUT);
+	k_work_reschedule(&link.prot_timer, PROTOCOL_TIMEOUT);
 
 	start = adv_buf_create(RETRANSMITS_RELIABLE);
 	if (!start) {
@@ -678,6 +681,7 @@ static int prov_send_adv(struct net_buf_simple *msg,
 	link.tx.buf[0] = start;
 	link.tx.cb = cb;
 	link.tx.cb_data = cb_data;
+	link.tx.start = k_uptime_get();
 
 	BT_DBG("xact_id: 0x%x len: %u", link.tx.id, msg->len);
 
@@ -725,6 +729,8 @@ static int prov_send_adv(struct net_buf_simple *msg,
 
 static void link_open(struct prov_rx *rx, struct net_buf_simple *buf)
 {
+	int err;
+
 	BT_DBG("len %u", buf->len);
 
 	if (buf->len < 16) {
@@ -734,13 +740,14 @@ static void link_open(struct prov_rx *rx, struct net_buf_simple *buf)
 
 	if (atomic_test_bit(link.flags, ADV_LINK_ACTIVE)) {
 		/* Send another link ack if the provisioner missed the last */
-		if (link.id == rx->link_id) {
-			BT_DBG("Resending link ack");
-			bearer_ctl_send(LINK_ACK, NULL, 0, false);
-		} else {
+		if (link.id != rx->link_id) {
 			BT_DBG("Ignoring bearer open: link already active");
+			return;
 		}
 
+		BT_DBG("Resending link ack");
+		/* Ignore errors, message will be attempted again if we keep receiving link open: */
+		(void)bearer_ctl_send_unacked(ctl_buf_create(LINK_ACK, NULL, 0, RETRANSMITS_ACK));
 		return;
 	}
 
@@ -753,7 +760,11 @@ static void link_open(struct prov_rx *rx, struct net_buf_simple *buf)
 	atomic_set_bit(link.flags, ADV_LINK_ACTIVE);
 	net_buf_simple_reset(link.rx.buf);
 
-	bearer_ctl_send(LINK_ACK, NULL, 0, false);
+	err = bearer_ctl_send_unacked(ctl_buf_create(LINK_ACK, NULL, 0, RETRANSMITS_ACK));
+	if (err) {
+		reset_adv_link();
+		return;
+	}
 
 	link.cb->link_opened(&pb_adv, link.cb_data);
 }
@@ -841,9 +852,7 @@ static int prov_link_open(const uint8_t uuid[16], k_timeout_t timeout,
 
 	net_buf_simple_reset(link.rx.buf);
 
-	bearer_ctl_send(LINK_OPEN, uuid, 16, true);
-
-	return 0;
+	return bearer_ctl_send(ctl_buf_create(LINK_OPEN, uuid, 16, RETRANSMITS_RELIABLE));
 }
 
 static int prov_link_accept(const struct prov_bearer_cb *cb, void *cb_data)
@@ -879,13 +888,14 @@ static void prov_link_close(enum prov_bearer_link_status status)
 		return;
 	}
 
-	bearer_ctl_send(LINK_CLOSE, &status, 1, true);
+	/* Ignore errors, the link will time out eventually if this doesn't get sent */
+	bearer_ctl_send_unacked(ctl_buf_create(LINK_CLOSE, &status, 1, RETRANSMITS_LINK_CLOSE));
 }
 
 void pb_adv_init(void)
 {
-	k_delayed_work_init(&link.prot_timer, protocol_timeout);
-	k_delayed_work_init(&link.tx.retransmit, prov_retransmit);
+	k_work_init_delayable(&link.prot_timer, protocol_timeout);
+	k_work_init_delayable(&link.tx.retransmit, prov_retransmit);
 }
 
 void pb_adv_reset(void)

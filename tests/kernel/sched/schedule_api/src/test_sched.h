@@ -14,7 +14,7 @@
 #define STACK_SIZE (640 + CONFIG_TEST_EXTRA_STACKSIZE)
 
 K_THREAD_STACK_EXTERN(tstack);
-extern K_THREAD_STACK_ARRAY_DEFINE(tstacks, MAX_NUM_THREAD, STACK_SIZE);
+K_THREAD_STACK_ARRAY_EXTERN(tstacks, MAX_NUM_THREAD, STACK_SIZE);
 extern struct k_thread user_thread;
 extern struct k_sem user_sem;
 
@@ -32,6 +32,7 @@ void test_priority_preemptible_wait_prio(void);
 void test_bad_priorities(void);
 void test_yield_cooperative(void);
 void test_sleep_cooperative(void);
+void test_busy_wait_cooperative(void);
 void test_sleep_wakeup_preemptible(void);
 void test_pending_thread_wakeup(void);
 void test_time_slicing_preemptible(void);
@@ -46,5 +47,12 @@ void test_priority_scheduling(void);
 void test_wakeup_expired_timer_thread(void);
 void test_user_k_wakeup(void);
 void test_user_k_is_preempt(void);
+void test_k_thread_suspend_init_null(void);
+void test_k_thread_resume_init_null(void);
+void test_k_thread_priority_get_init_null(void);
+void test_k_thread_priority_set_init_null(void);
+void test_k_thread_priority_set_overmax(void);
+void test_k_thread_priority_set_upgrade(void);
+void test_k_wakeup_init_null(void);
 
 #endif /* __TEST_SCHED_H__ */

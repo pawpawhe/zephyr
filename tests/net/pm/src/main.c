@@ -21,29 +21,28 @@ struct fake_dev_context {
 	struct net_if *iface;
 };
 
-static int fake_dev_pm_control(const struct device *dev, uint32_t command,
-			       void *context, device_pm_cb cb, void *arg)
+static int fake_dev_pm_action(const struct device *dev,
+			      enum pm_device_action action)
 {
 	struct fake_dev_context *ctx = dev->data;
-	int ret = 0;
+	int ret;
 
-	if (command == DEVICE_PM_SET_POWER_STATE) {
-		if (*(uint32_t *)context == DEVICE_PM_SUSPEND_STATE) {
-			ret = net_if_suspend(ctx->iface);
-			if (ret == -EBUSY) {
-				goto out;
-			}
-		} else if (*(uint32_t *)context == DEVICE_PM_ACTIVE_STATE) {
-			ret = net_if_resume(ctx->iface);
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		ret = net_if_suspend(ctx->iface);
+		if (ret == -EBUSY) {
+			goto out;
 		}
-	} else {
-		return -EINVAL;
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		ret = net_if_resume(ctx->iface);
+		break;
+	default:
+		ret = -ENOTSUP;
+		break;
 	}
 
 out:
-	if (cb) {
-		cb(dev, ret, context, arg);
-	}
 
 	return ret;
 }
@@ -100,17 +99,21 @@ static struct dummy_api fake_dev_if_api = {
 #define _ETH_L2_LAYER    DUMMY_L2
 #define _ETH_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(DUMMY_L2)
 
+PM_DEVICE_DEFINE(fake_dev, fake_dev_pm_action);
+
 NET_DEVICE_INIT(fake_dev, "fake_dev",
-		fake_dev_init, fake_dev_pm_control,
+		fake_dev_init, PM_DEVICE_REF(fake_dev),
 		&fake_dev_context_data, NULL,
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		&fake_dev_if_api, _ETH_L2_LAYER, _ETH_L2_CTX_TYPE, 127);
 
 void test_setup(void)
 {
-	struct net_if *iface = net_if_get_default();
+	struct net_if *iface;
 	struct in_addr in4addr_my = { { { 192, 168, 0, 2 } } };
 	struct net_if_addr *ifaddr;
+
+	iface = net_if_get_first_by_type(&NET_L2_GET_NAME(DUMMY));
 
 	net_if_up(iface);
 
@@ -120,7 +123,8 @@ void test_setup(void)
 
 void test_pm(void)
 {
-	struct net_if *iface = net_if_get_default();
+	struct net_if *iface =
+		net_if_get_first_by_type(&NET_L2_GET_NAME(DUMMY));
 	const struct device *dev = net_if_get_device(iface);
 	char data[] = "some data";
 	struct sockaddr_in addr4;
@@ -146,15 +150,13 @@ void test_pm(void)
 	 */
 	k_yield();
 
-	ret = device_set_power_state(dev, DEVICE_PM_SUSPEND_STATE,
-				     NULL, NULL);
+	ret = pm_device_action_run(dev, PM_DEVICE_ACTION_SUSPEND);
 	zassert_true(ret == 0, "Could not set state");
 
 	zassert_true(net_if_is_suspended(iface), "net iface is not suspended");
 
 	/* Let's try to suspend it again, it should fail relevantly */
-	ret = device_set_power_state(dev, DEVICE_PM_SUSPEND_STATE,
-				     NULL, NULL);
+	ret = pm_device_action_run(dev, PM_DEVICE_ACTION_SUSPEND);
 	zassert_true(ret == -EALREADY, "Could change state");
 
 	zassert_true(net_if_is_suspended(iface), "net iface is not suspended");
@@ -164,14 +166,12 @@ void test_pm(void)
 		     (struct sockaddr *)&addr4, sizeof(struct sockaddr_in));
 	zassert_true(ret < 0, "Could send data");
 
-	ret = device_set_power_state(dev, DEVICE_PM_ACTIVE_STATE,
-				     NULL, NULL);
+	ret = pm_device_action_run(dev, PM_DEVICE_ACTION_RESUME);
 	zassert_true(ret == 0, "Could not set state");
 
 	zassert_false(net_if_is_suspended(iface), "net iface is suspended");
 
-	ret = device_set_power_state(dev, DEVICE_PM_ACTIVE_STATE,
-				     NULL, NULL);
+	ret = pm_device_action_run(dev, PM_DEVICE_ACTION_RESUME);
 	zassert_true(ret == -EALREADY, "Could change state");
 
 	/* Let's send some data, it should go through */

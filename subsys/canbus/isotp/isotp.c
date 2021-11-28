@@ -36,11 +36,8 @@ static struct isotp_global_ctx global_ctx = {
 
 #ifdef CONFIG_ISOTP_USE_TX_BUF
 NET_BUF_POOL_VAR_DEFINE(isotp_tx_pool, CONFIG_ISOTP_TX_BUF_COUNT,
-			CONFIG_ISOTP_BUF_TX_DATA_POOL_SIZE, NULL);
+			CONFIG_ISOTP_BUF_TX_DATA_POOL_SIZE, 0, NULL);
 #endif
-
-K_KERNEL_STACK_DEFINE(tx_stack, CONFIG_ISOTP_WORKQ_STACK_SIZE);
-static struct k_work_q isotp_workq;
 
 static void receive_state_machine(struct isotp_recv_ctx *ctx);
 
@@ -71,17 +68,6 @@ static void receive_ff_sf_pool_free(struct net_buf *buf)
 		ctx = CONTAINER_OF(ctx_node, struct isotp_recv_ctx, alloc_node);
 		k_work_submit(&ctx->work);
 	}
-}
-
-static inline int _k_fifo_wait_non_empty(struct k_fifo *fifo,
-					 k_timeout_t timeout)
-{
-	struct k_poll_event events[] = {
-		K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_FIFO_DATA_AVAILABLE,
-					 K_POLL_MODE_NOTIFY_ONLY, fifo),
-	};
-
-	return k_poll(events, ARRAY_SIZE(events), timeout);
 }
 
 static inline void receive_report_error(struct isotp_recv_ctx *ctx, int err)
@@ -695,62 +681,40 @@ int isotp_recv_net(struct isotp_recv_ctx *ctx, struct net_buf **buffer,
 	return *(uint32_t *)net_buf_user_data(buf);
 }
 
-static inline void pull_frags(struct k_fifo *fifo, struct net_buf *buf,
-			      size_t len)
-{
-	size_t rem_len = len;
-	struct net_buf *frag = buf;
-
-	/* frags to be removed */
-	while (frag && (frag->len <= rem_len)) {
-		rem_len -= frag->len;
-		frag = frag->frags;
-		k_fifo_get(fifo, K_NO_WAIT);
-	}
-
-	if (frag) {
-		/* Start of frags to be preserved */
-		net_buf_ref(frag);
-		net_buf_pull(frag, rem_len);
-	}
-
-	net_buf_unref(buf);
-}
-
 int isotp_recv(struct isotp_recv_ctx *ctx, uint8_t *data, size_t len,
 	       k_timeout_t timeout)
 {
-	size_t num_copied, frags_len;
-	struct net_buf *buf;
-	int ret;
+	size_t copied, to_copy;
+	int err;
 
-	ret = _k_fifo_wait_non_empty(&ctx->fifo, timeout);
-	if (ret) {
-		if (ctx->error_nr) {
-			ret = ctx->error_nr;
+	if (!ctx->recv_buf) {
+		ctx->recv_buf = net_buf_get(&ctx->fifo, timeout);
+		if (!ctx->recv_buf) {
+			err = ctx->error_nr ? ctx->error_nr : ISOTP_RECV_TIMEOUT;
 			ctx->error_nr = 0;
-			return ret;
-		}
 
-		if (ret == -EAGAIN) {
-			return ISOTP_RECV_TIMEOUT;
+			return err;
 		}
-
-		return ISOTP_N_ERROR;
 	}
 
-	buf = k_fifo_peek_head(&ctx->fifo);
+	/* traverse fragments and delete them after copying the data */
+	copied = 0;
+	while (ctx->recv_buf && copied < len) {
+		to_copy = MIN(len - copied, ctx->recv_buf->len);
+		memcpy((uint8_t *)data + copied, ctx->recv_buf->data, to_copy);
 
-	if (!buf) {
-		return ISOTP_N_ERROR;
+		if (ctx->recv_buf->len == to_copy) {
+			/* point recv_buf to next frag */
+			ctx->recv_buf = net_buf_frag_del(NULL, ctx->recv_buf);
+		} else {
+			/* pull received data from remaining frag(s) */
+			net_buf_pull(ctx->recv_buf, to_copy);
+		}
+
+		copied += to_copy;
 	}
 
-	frags_len = net_buf_frags_len(buf);
-	num_copied = net_buf_linearize(data, len, buf, 0, len);
-
-	pull_frags(&ctx->fifo, buf, num_copied);
-
-	return num_copied;
+	return copied;
 }
 
 static inline void send_report_error(struct isotp_send_ctx *ctx, uint32_t err)
@@ -1329,18 +1293,3 @@ int isotp_send_buf(const struct device *can_dev,
 }
 #endif  /*CONFIG_ISOTP_USE_TX_BUF*/
 #endif  /*CONFIG_ISOTP_ENABLE_CONTEXT_BUFFERS*/
-
-static int isotp_workq_init(const struct device *dev)
-{
-	ARG_UNUSED(dev);
-	LOG_DBG("Starting workqueue");
-	k_work_q_start(&isotp_workq,
-		       tx_stack,
-		       K_KERNEL_STACK_SIZEOF(tx_stack),
-		       CONFIG_ISOTP_WORKQUEUE_PRIO);
-	k_thread_name_set(&isotp_workq.thread, "isotp_work");
-
-	return 0;
-}
-
-SYS_INIT(isotp_workq_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);

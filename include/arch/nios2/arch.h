@@ -22,7 +22,7 @@
 #include <devicetree.h>
 #include <arch/nios2/nios2.h>
 #include <arch/common/sys_bitops.h>
-#include <arch/common/sys_io.h>
+#include <sys/sys_io.h>
 #include <arch/common/ffs.h>
 
 #define ARCH_STACK_PTR_ALIGN  4
@@ -176,6 +176,13 @@ extern uint32_t sys_clock_cycle_get_32(void);
 static inline uint32_t arch_k_cycle_get_32(void)
 {
 	return sys_clock_cycle_get_32();
+}
+
+extern uint64_t sys_clock_cycle_get_64(void);
+
+static inline uint64_t arch_k_cycle_get_64(void)
+{
+	return sys_clock_cycle_get_64();
 }
 
 static ALWAYS_INLINE void arch_nop(void)

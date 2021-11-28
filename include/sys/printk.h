@@ -12,6 +12,9 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#if defined(CONFIG_LOG_PRINTK) && defined(CONFIG_LOG2)
+#include <logging/log.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,8 +48,20 @@ extern "C" {
  * @return N/A
  */
 #ifdef CONFIG_PRINTK
+
+#if defined(CONFIG_LOG_PRINTK) && defined(CONFIG_LOG2)
+#define printk(...) Z_LOG_PRINTK(__VA_ARGS__)
+static inline __printf_like(1, 0) void vprintk(const char *fmt, va_list ap)
+{
+	z_log_msg2_runtime_vcreate(CONFIG_LOG_DOMAIN_ID, NULL,
+				   LOG_LEVEL_INTERNAL_RAW_STRING, NULL, 0,
+				   fmt, ap);
+}
+#else
 extern __printf_like(1, 2) void printk(const char *fmt, ...);
 extern __printf_like(1, 0) void vprintk(const char *fmt, va_list ap);
+#endif /* defined(CONFIG_LOG_PRINTK) && defined(CONFIG_LOG) */
+
 #else
 static inline __printf_like(1, 2) void printk(const char *fmt, ...)
 {

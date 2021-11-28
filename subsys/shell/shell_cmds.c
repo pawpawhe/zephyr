@@ -292,7 +292,7 @@ static int cmd_history(const struct shell *shell, size_t argc, char **argv)
 
 		if (len) {
 			shell_print(shell, "[%3d] %s",
-				    i++, shell->ctx->temp_buff);
+				    (int)i++, shell->ctx->temp_buff);
 
 		} else {
 			break;
@@ -310,7 +310,7 @@ static int cmd_shell_stats_show(const struct shell *shell, size_t argc,
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	shell_print(shell, "Lost logs: %u", shell->stats->log_lost_cnt);
+	shell_print(shell, "Lost logs: %lu", shell->stats->log_lost_cnt);
 
 	return 0;
 }
@@ -392,8 +392,10 @@ static int cmd_select(const struct shell *shell, size_t argc, char **argv)
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(m_sub_colors,
-	SHELL_CMD_ARG(off, NULL, SHELL_HELP_COLORS_OFF, cmd_colors_off, 1, 0),
-	SHELL_CMD_ARG(on, NULL, SHELL_HELP_COLORS_ON, cmd_colors_on, 1, 0),
+	SHELL_COND_CMD_ARG(CONFIG_SHELL_VT100_COMMANDS, off, NULL,
+			   SHELL_HELP_COLORS_OFF, cmd_colors_off, 1, 0),
+	SHELL_COND_CMD_ARG(CONFIG_SHELL_VT100_COMMANDS, on, NULL,
+			   SHELL_HELP_COLORS_ON, cmd_colors_on, 1, 0),
 	SHELL_SUBCMD_SET_END
 );
 
@@ -422,7 +424,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(m_sub_backspace_mode,
 SHELL_STATIC_SUBCMD_SET_CREATE(m_sub_shell,
 	SHELL_CMD(backspace_mode, &m_sub_backspace_mode,
 			SHELL_HELP_BACKSPACE_MODE, NULL),
-	SHELL_CMD(colors, &m_sub_colors, SHELL_HELP_COLORS, NULL),
+	SHELL_COND_CMD(CONFIG_SHELL_VT100_COMMANDS, colors, &m_sub_colors,
+		       SHELL_HELP_COLORS, NULL),
 	SHELL_CMD_ARG(echo, &m_sub_echo, SHELL_HELP_ECHO, cmd_echo, 1, 1),
 	SHELL_COND_CMD(CONFIG_SHELL_STATS, stats, &m_sub_shell_stats,
 			SHELL_HELP_STATISTICS, NULL),
@@ -435,7 +438,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(m_sub_resize,
 	SHELL_SUBCMD_SET_END
 );
 
-SHELL_CMD_ARG_REGISTER(clear, NULL, SHELL_HELP_CLEAR, cmd_clear, 1, 0);
+SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_VT100_COMMANDS, clear, NULL,
+			    SHELL_HELP_CLEAR, cmd_clear, 1, 0);
 SHELL_CMD_REGISTER(shell, &m_sub_shell, SHELL_HELP_SHELL, NULL);
 SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_HISTORY, history, NULL,
 			SHELL_HELP_HISTORY, cmd_history, 1, 0);

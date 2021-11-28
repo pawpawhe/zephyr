@@ -7,17 +7,21 @@
 #ifndef ZEPHYR_INCLUDE_ARCH_ARM64_THREAD_STACK_H_
 #define ZEPHYR_INCLUDE_ARCH_ARM64_THREAD_STACK_H_
 
+
 #define ARCH_STACK_PTR_ALIGN			16
 
 #if CONFIG_USERSPACE
-#define Z_ARM64_STACK_BASE_ALIGN		CONFIG_MMU_PAGE_SIZE
-#define Z_ARM64_STACK_SIZE_ALIGN		CONFIG_MMU_PAGE_SIZE
+#include <arch/arm64/mm.h>
+#define Z_ARM64_STACK_BASE_ALIGN		MEM_DOMAIN_ALIGN_AND_SIZE
+#define Z_ARM64_STACK_SIZE_ALIGN		MEM_DOMAIN_ALIGN_AND_SIZE
 #else
 #define Z_ARM64_STACK_BASE_ALIGN		ARCH_STACK_PTR_ALIGN
 #define Z_ARM64_STACK_SIZE_ALIGN		ARCH_STACK_PTR_ALIGN
 #endif
 
 /*
+ * [ see also comments in arch/arm64/core/thread.c ]
+ *
  * High memory addresses
  *
  * +-------------------+ <- thread.stack_info.start + thread.stack_info.size
@@ -31,7 +35,7 @@
  * |   Unused stack    |
  * |                   |
  * +-------------------+ <- thread.stack_info.start
- * |  Reserved memory  | } K_(THREAD|KERNEL)_STACK_RESERVED
+ * | Privileged stack  | } K_(THREAD|KERNEL)_STACK_RESERVED
  * +-------------------+ <- thread.stack_obj
  *
  * Low Memory addresses

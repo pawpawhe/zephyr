@@ -15,7 +15,6 @@
 #define TICKER_USER_ID_THREAD   MAYFLY_CALL_ID_PROGRAM
 
 #define EVENT_PIPELINE_MAX 7
-#define EVENT_DONE_MAX 3
 #if defined(CONFIG_BT_CTLR_LOW_LAT_ULL)
 #define EVENT_DONE_LINK_CNT 0
 #else
@@ -26,10 +25,8 @@
 #define SCAN_INT_UNIT_US 625U
 #define CONN_INT_UNIT_US 1250U
 
-#define HDR_ULL(p)     ((void *)((uint8_t *)(p) + sizeof(struct evt_hdr)))
-#define HDR_ULL2LLL(p) ((struct lll_hdr *)((uint8_t *)(p) + \
-					   sizeof(struct ull_hdr)))
-#define HDR_LLL2EVT(p) ((struct evt_hdr *)((struct lll_hdr *)(p))->parent)
+/* Intervals after which connection or sync establishment is considered lost */
+#define CONN_ESTAB_COUNTDOWN 6U
 
 #if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
 #define XON_BITMASK BIT(31) /* XTAL has been retained from previous prepare */
@@ -114,11 +111,14 @@ enum {
 			       1),
 #endif /* CONFIG_BT_CONN */
 
-#if defined(CONFIG_BT_CTLR_CONN_ISO_GROUPS)
+#if defined(CONFIG_BT_CTLR_CONN_ISO)
 	TICKER_ID_CONN_ISO_BASE,
 	TICKER_ID_CONN_ISO_LAST = ((TICKER_ID_CONN_ISO_BASE) +
 				   (CONFIG_BT_CTLR_CONN_ISO_GROUPS) - 1),
-#endif /* CONFIG_BT_CTLR_CONN_ISO_GROUPS */
+	TICKER_ID_CONN_ISO_RESUME_BASE,
+	TICKER_ID_CONN_ISO_RESUME_LAST = ((TICKER_ID_CONN_ISO_RESUME_BASE) +
+					  (CONFIG_BT_CTLR_CONN_ISO_GROUPS) - 1),
+#endif /* CONFIG_BT_CTLR_CONN_ISO */
 
 #if defined(CONFIG_BT_CTLR_USER_EXT) && \
 	(CONFIG_BT_CTLR_USER_TICKER_ID_RANGE > 0)
@@ -135,25 +135,68 @@ enum {
 #define TICKER_ID_ADV_LAST TICKER_ID_ADV_BASE
 #endif
 
+/* Define the Broadcast ISO Stream Handle base value */
+#if defined(CONFIG_BT_CTLR_ADV_ISO)
+#define BT_CTLR_ADV_ISO_STREAM_MAX CONFIG_BT_CTLR_ADV_ISO_STREAM_MAX
+#if defined(CONFIG_BT_MAX_CONN)
+#define BT_CTLR_ADV_ISO_STREAM_HANDLE_BASE (CONFIG_BT_MAX_CONN)
+#else /* !CONFIG_BT_MAX_CONN */
+#define BT_CTLR_ADV_ISO_STREAM_HANDLE_BASE 0
+#endif /* !CONFIG_BT_MAX_CONN */
+#else /* !CONFIG_BT_CTLR_ADV_ISO */
+#define BT_CTLR_ADV_ISO_STREAM_MAX 0
+#endif /* CONFIG_BT_CTLR_ADV_ISO */
+
+/* Define the ISO Synchronized Receiver Stream Handle base value */
+#if defined(CONFIG_BT_CTLR_SYNC_ISO)
+#define BT_CTLR_SYNC_ISO_STREAM_MAX CONFIG_BT_CTLR_SYNC_ISO_STREAM_MAX
+#if defined(CONFIG_BT_CTLR_ADV_ISO)
+#define BT_CTLR_SYNC_ISO_STREAM_HANDLE_BASE \
+	(BT_CTLR_ADV_ISO_STREAM_HANDLE_BASE + \
+	 CONFIG_BT_CTLR_ADV_ISO_STREAM_COUNT)
+#elif defined(CONFIG_BT_MAX_CONN)
+#define BT_CTLR_SYNC_ISO_STREAM_HANDLE_BASE (CONFIG_BT_MAX_CONN)
+#else /* !CONFIG_BT_MAX_CONN */
+#define BT_CTLR_SYNC_ISO_STREAM_HANDLE_BASE 0
+#endif /* !CONFIG_BT_MAX_CONN */
+#else /* !CONFIG_BT_CTLR_SYNC_ISO */
+#define BT_CTLR_SYNC_ISO_STREAM_MAX 0
+#endif /* !CONFIG_BT_CTLR_SYNC_ISO */
+
 #define TICKER_ID_ULL_BASE ((TICKER_ID_LLL_PREEMPT) + 1)
 
-enum ull_status {
-	ULL_STATUS_SUCCESS,
-	ULL_STATUS_FAILURE,
-	ULL_STATUS_BUSY,
+enum done_result {
+	DONE_COMPLETED,
+	DONE_ABORTED,
+	DONE_LATE
 };
 
-struct evt_hdr {
-	uint32_t ticks_xtal_to_start;
-	uint32_t ticks_active_to_start;
-	uint32_t ticks_preempt_to_start;
-	uint32_t ticks_slot;
-};
+/* Forward declaration data type to store CTE IQ samples report related data */
+struct cte_conn_iq_report;
 
 struct ull_hdr {
 	uint8_t volatile ref;  /* Number of ongoing (between Prepare and Done)
 				* events
 				*/
+
+	/* Event parameters */
+	/* TODO: The intention is to use the greater of the
+	 *       ticks_prepare_to_start or ticks_active_to_start as the prepare
+	 *       offset. At the prepare tick generate a software interrupt
+	 *       servicable by application as the per role configurable advance
+	 *       radio event notification, usable for data acquisitions.
+	 *       ticks_preempt_to_start is the per role dynamic preempt offset,
+	 *       which shall be based on role's preparation CPU usage
+	 *       requirements.
+	 */
+	struct {
+		uint32_t ticks_active_to_start;
+		uint32_t ticks_prepare_to_start;
+		uint32_t ticks_preempt_to_start;
+		uint32_t ticks_slot;
+	};
+
+	/* ULL context disabled callback and its parameter */
 	void (*disabled_cb)(void *param);
 	void *disabled_param;
 };
@@ -165,6 +208,8 @@ struct lll_hdr {
 	uint8_t latency;
 #endif /* CONFIG_BT_CTLR_JIT_SCHEDULING */
 };
+
+#define HDR_LLL2ULL(p) (((struct lll_hdr *)(p))->parent)
 
 struct lll_prepare_param {
 	uint32_t ticks_at_expire;
@@ -211,11 +256,14 @@ enum node_rx_type {
 	NODE_RX_TYPE_EXT_2M_REPORT,
 	NODE_RX_TYPE_EXT_CODED_REPORT,
 	NODE_RX_TYPE_EXT_AUX_REPORT,
+	NODE_RX_TYPE_EXT_AUX_RELEASE,
 	NODE_RX_TYPE_EXT_SCAN_TERMINATE,
 	NODE_RX_TYPE_SYNC,
 	NODE_RX_TYPE_SYNC_REPORT,
 	NODE_RX_TYPE_SYNC_LOST,
+	NODE_RX_TYPE_SYNC_CHM_COMPLETE,
 	NODE_RX_TYPE_SYNC_ISO,
+	NODE_RX_TYPE_SYNC_ISO_PDU,
 	NODE_RX_TYPE_SYNC_ISO_LOST,
 	NODE_RX_TYPE_EXT_ADV_TERMINATE,
 	NODE_RX_TYPE_BIG_COMPLETE,
@@ -236,6 +284,7 @@ enum node_rx_type {
 	NODE_RX_TYPE_CIS_ESTABLISHED,
 	NODE_RX_TYPE_MESH_ADV_CPLT,
 	NODE_RX_TYPE_MESH_REPORT,
+	NODE_RX_TYPE_IQ_SAMPLE_REPORT,
 
 #if defined(CONFIG_BT_CTLR_USER_EXT)
 	/* No entries shall be added after the NODE_RX_TYPE_USER_START/END */
@@ -255,17 +304,46 @@ struct node_rx_ftr {
 			uint16_t conn_handle;
 		} param_adv_term;
 	};
-	void     *extra;
+	union {
+		void *extra;   /* Used as next pointer for extended PDU
+				* chaining, to reserve node_rx for CSA#2 event
+				* generation etc.
+				*/
+		void *aux_ptr;
+		uint8_t aux_phy;
+		uint8_t aux_sched;
+		struct cte_conn_iq_report *iq_report;
+	};
 	uint32_t ticks_anchor;
 	uint32_t radio_end_us;
 	uint8_t  rssi;
+
 #if defined(CONFIG_BT_CTLR_PRIVACY)
-	uint8_t  lrpa_used:1;
 	uint8_t  rl_idx;
+	uint8_t  lrpa_used:1;
 #endif /* CONFIG_BT_CTLR_PRIVACY */
+
 #if defined(CONFIG_BT_CTLR_EXT_SCAN_FP)
-	uint8_t  direct;
+	uint8_t  direct:1;
 #endif /* CONFIG_BT_CTLR_EXT_SCAN_FP */
+
+#if defined(CONFIG_BT_CTLR_ADV_EXT) && defined(CONFIG_BT_OBSERVER)
+#if defined(CONFIG_BT_CTLR_PRIVACY)
+	uint8_t  direct_resolved:1;
+#endif /* CONFIG_BT_CTLR_PRIVACY */
+
+	uint8_t  aux_lll_sched:1;
+	uint8_t  aux_w4next:1;
+	uint8_t  aux_failed:1;
+#if defined(CONFIG_BT_CTLR_SYNC_PERIODIC)
+	uint8_t sync_status:2;
+#endif /* CONFIG_BT_CTLR_SYNC_PERIODIC */
+
+	uint8_t  phy_flags:1;
+	uint8_t  scan_req:1;
+	uint8_t  scan_rsp:1;
+#endif /* CONFIG_BT_CTLR_ADV_EXT && CONFIG_BT_OBSERVER */
+
 #if defined(CONFIG_BT_HCI_MESH_EXT)
 	uint8_t  chan_idx;
 #endif /* CONFIG_BT_HCI_MESH_EXT */
@@ -277,6 +355,15 @@ struct node_rx_iso_meta {
 	uint32_t timestamp;           /* Time of reception */
 	uint8_t  status;              /* Status of reception (OK/not OK) */
 };
+
+/* Define invalid/unassigned Controller state/role instance handle */
+#define NODE_RX_HANDLE_INVALID 0xFFFF
+
+/* Define invalid/unassigned Controller LLL context handle */
+#define LLL_HANDLE_INVALID     0xFFFF
+
+/* Define invalid/unassigned Controller Advertising LLL context handle */
+#define LLL_ADV_HANDLE_INVALID 0xFF
 
 /* Header of node_rx_pdu */
 struct node_rx_hdr {
@@ -292,9 +379,7 @@ struct node_rx_hdr {
 
 	union {
 		struct node_rx_ftr rx_ftr;
-#if defined(CONFIG_BT_CTLR_SYNC_ISO) || \
-	defined(CONFIG_BT_CTLR_PERIPHERAL_ISO) || \
-	defined(CONFIG_BT_CTLR_CENTRAL_ISO)
+#if defined(CONFIG_BT_CTLR_SYNC_ISO) || defined(CONFIG_BT_CTLR_CONN_ISO)
 		struct node_rx_iso_meta rx_iso_meta;
 #endif
 #if defined(CONFIG_BT_CTLR_RX_PDU_META)
@@ -322,11 +407,16 @@ enum {
 	EVENT_DONE_EXTRA_TYPE_CONN,
 #endif /* CONFIG_BT_CONN */
 
-#if defined(CONFIG_BT_CTLR_ADV_EXT)
+#if defined(CONFIG_BT_CTLR_ADV_EXT) || defined(CONFIG_BT_CTLR_JIT_SCHEDULING)
 #if defined(CONFIG_BT_BROADCASTER)
 	EVENT_DONE_EXTRA_TYPE_ADV,
+	EVENT_DONE_EXTRA_TYPE_ADV_AUX,
+#if defined(CONFIG_BT_CTLR_ADV_ISO)
+	EVENT_DONE_EXTRA_TYPE_ADV_ISO_COMPLETE,
+	EVENT_DONE_EXTRA_TYPE_ADV_ISO_TERMINATE,
+#endif /* CONFIG_BT_CTLR_ADV_ISO */
 #endif /* CONFIG_BT_BROADCASTER */
-#endif /* CONFIG_BT_CTLR_ADV_EXT */
+#endif /* CONFIG_BT_CTLR_ADV_EXT || CONFIG_BT_CTLR_JIT_SCHEDULING */
 
 #if defined(CONFIG_BT_OBSERVER)
 #if defined(CONFIG_BT_CTLR_ADV_EXT)
@@ -334,13 +424,18 @@ enum {
 	EVENT_DONE_EXTRA_TYPE_SCAN_AUX,
 #if defined(CONFIG_BT_CTLR_SYNC_PERIODIC)
 	EVENT_DONE_EXTRA_TYPE_SYNC,
+#if defined(CONFIG_BT_CTLR_SYNC_ISO)
+	EVENT_DONE_EXTRA_TYPE_SYNC_ISO_ESTAB,
+	EVENT_DONE_EXTRA_TYPE_SYNC_ISO,
+	EVENT_DONE_EXTRA_TYPE_SYNC_ISO_TERMINATE,
+#endif /* CONFIG_BT_CTLR_SYNC_ISO */
 #endif /* CONFIG_BT_CTLR_SYNC_PERIODIC */
 #endif /* CONFIG_BT_CTLR_ADV_EXT */
 #endif /* CONFIG_BT_OBSERVER */
 
-#if defined(CONFIG_BT_CTLR_CONN_ISO_STREAMS)
+#if defined(CONFIG_BT_CTLR_CONN_ISO)
 	EVENT_DONE_EXTRA_TYPE_CIS,
-#endif /* CONFIG_BT_CTLR_CONN_ISO_STREAMS */
+#endif /* CONFIG_BT_CTLR_CONN_ISO */
 
 /* Following proprietary defines must be at end of enum range */
 #if defined(CONFIG_BT_CTLR_USER_EXT)
@@ -359,10 +454,20 @@ struct event_done_extra_drift {
 
 struct event_done_extra {
 	uint8_t type;
+#if defined(CONFIG_BT_CTLR_JIT_SCHEDULING)
+	uint8_t result;
+#endif /* CONFIG_BT_CTLR_JIT_SCHEDULING */
 	union {
 		struct {
 			uint16_t trx_cnt;
-			uint8_t  crc_valid;
+			uint8_t  crc_valid:1;
+#if defined(CONFIG_BT_CTLR_SYNC_PERIODIC_CTE_TYPE_FILTERING) && \
+	defined(CONFIG_BT_CTLR_CTEINLINE_SUPPORT)
+			/* Used to inform ULL that periodic advertising sync scan should be
+			 * terminated.
+			 */
+			uint8_t  sync_term:1;
+#endif /* CONFIG_BT_CTLR_SYNC_PERIODIC_CTE_TYPE_FILTERING && CONFIG_BT_CTLR_CTEINLINE_SUPPORT */
 #if defined(CONFIG_BT_CTLR_LE_ENC)
 			uint8_t  mic_state;
 #endif /* CONFIG_BT_CTLR_LE_ENC */
@@ -393,13 +498,13 @@ static inline void lll_hdr_init(void *lll, void *parent)
 #endif /* CONFIG_BT_CTLR_JIT_SCHEDULING */
 }
 
-void lll_done_score(void *param, uint8_t too_late, uint8_t aborted);
+void lll_done_score(void *param, uint8_t result);
 
 int lll_init(void);
 int lll_reset(void);
 void lll_resume(void *param);
 void lll_disable(void *param);
-void lll_done_sync(void);
+void lll_done_ull_inc(void);
 uint32_t lll_radio_is_idle(void);
 uint32_t lll_radio_tx_ready_delay_get(uint8_t phy, uint8_t flags);
 uint32_t lll_radio_rx_ready_delay_get(uint8_t phy, uint8_t flags);
@@ -412,11 +517,11 @@ int lll_csrand_isr_get(void *buf, size_t len);
 int lll_rand_get(void *buf, size_t len);
 int lll_rand_isr_get(void *buf, size_t len);
 
-int ull_prepare_enqueue(lll_is_abort_cb_t is_abort_cb,
-			       lll_abort_cb_t abort_cb,
-			       struct lll_prepare_param *prepare_param,
-			       lll_prepare_cb_t prepare_cb,
-			       uint8_t is_resume);
+struct lll_event *ull_prepare_enqueue(lll_is_abort_cb_t is_abort_cb,
+				      lll_abort_cb_t abort_cb,
+				      struct lll_prepare_param *prepare_param,
+				      lll_prepare_cb_t prepare_cb,
+				      uint8_t is_resume);
 void *ull_prepare_dequeue_get(void);
 void *ull_prepare_dequeue_iter(uint8_t *idx);
 void ull_prepare_dequeue(uint8_t caller_id);
@@ -430,7 +535,8 @@ void ull_rx_put(memq_link_t *link, void *rx);
 void ull_rx_put_done(memq_link_t *link, void *done);
 void ull_rx_sched(void);
 void ull_rx_sched_done(void);
-void *ull_event_done_extra_get(void);
+struct event_done_extra *ull_event_done_extra_get(void);
+struct event_done_extra *ull_done_extra_type_set(uint8_t type);
 void *ull_event_done(void *param);
 
 int lll_prepare(lll_is_abort_cb_t is_abort_cb,

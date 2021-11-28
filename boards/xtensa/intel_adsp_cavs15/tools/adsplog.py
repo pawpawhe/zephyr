@@ -6,7 +6,6 @@
 import os
 import sys
 import time
-import subprocess
 import mmap
 
 # Log reader for the trace output buffer on a ADSP device.
@@ -29,7 +28,7 @@ import mmap
 # data, followed a 16 bit "ID" number, followed by a null-terminated
 # string in the final 60 bytes (or 60 non-null bytes of log data).
 # The DSP firmware will write sequential IDs into the buffer starting
-# from an ID of zero in the first slot, and wrapping at the end.
+# from an ID of '1' in the 0th slot, and wrapping at the end.
 
 MAP_SIZE = 8192
 SLOT_SIZE = 64
@@ -40,34 +39,40 @@ WIN_IDX = 3
 WIN_SIZE = 0x20000
 LOG_OFFSET = WIN_OFFSET + WIN_IDX * WIN_SIZE
 
-# List of known ADSP devices by their PCI IDs
-DEVICES = ["8086:5a98"]
-
 mem = None
+sys_devices = "/sys/bus/pci/devices"
 
-for dev in DEVICES:
-    # Find me a way to do this detection as cleanly in python as shell, I
-    # dare you.
-    barfile = subprocess.Popen(["sh", "-c",
-                                "echo -n "
-                                "$(dirname "
-                                f"  $(fgrep PCI_ID={dev.upper()} "
-                                "    /sys/bus/pci/devices/*/uevent))"
-                                "/resource4"],
-                               stdout=subprocess.PIPE).stdout.read()
-    if not os.path.exists(barfile):
+reset_logged = False
+
+for dev_addr in os.listdir(sys_devices):
+    class_file = sys_devices + "/" + dev_addr + "/class"
+    pciclass = open(class_file).read()
+
+    vendor_file = sys_devices + "/" + dev_addr + "/vendor"
+    pcivendor = open(vendor_file).read()
+
+    if not "0x8086" in pcivendor:
         continue
 
-    if not os.access(barfile, os.R_OK):
-        sys.stderr.write(f"ERROR: Cannot open {barfile} for reading.")
-        sys.exit(1)
+    # Intel Multimedia audio controller
+    #   0x040100 -> DSP is present
+    #   0x040380 -> DSP is present but optional
+    if "0x040100" in pciclass or "0x040380" in pciclass:
+        barfile = sys_devices + "/" + dev_addr + "/resource4"
 
-    fd = open(barfile)
-    mem = mmap.mmap(fd.fileno(), MAP_SIZE, offset=LOG_OFFSET,
-                    prot=mmap.PROT_READ)
+        fd = open(barfile)
+        try:
+            mem = mmap.mmap(fd.fileno(), MAP_SIZE, offset=LOG_OFFSET,
+                            prot=mmap.PROT_READ)
+        except OSError as ose:
+            sys.stderr.write("""\
+mmap failed! If CONFIG IO_STRICT_DEVMEM is set then you must unload the kernel driver.
+""")
+            raise ose
+        break
 
 if mem is None:
-    sys.stderr.write("ERROR: No ADSP device found.")
+    sys.stderr.write("ERROR: No ADSP device found.\n")
     sys.exit(1)
 
 # Returns a tuple of (id, msg) if the slot is valid, or (-1, "") if
@@ -96,6 +101,7 @@ def read_slot(slot, mem):
     return (sid, msg.decode(encoding="utf-8", errors="ignore"))
 
 def read_hist(start_slot):
+    global reset_logged
     id0, msg = read_slot(start_slot, mem)
 
     # An invalid slot zero means no data has ever been placed in the
@@ -104,10 +110,14 @@ def read_hist(start_slot):
     # been observed to hang the flash process (which I think can only
     # be a hardware bug).
     if start_slot == 0 and id0 < 0:
-        sys.stdout.write("===\n=== [ADSP Device Reset]\n===\n")
-        sys.stdout.flush()
+        if not reset_logged:
+            sys.stdout.write("===\n=== [Invalid slot 0; ADSP Device Reset?]\n===\n")
+            sys.stdout.flush()
+        reset_logged = True
         time.sleep(1)
         return (0, 0, "")
+
+    reset_logged = False
 
     # Start at zero and read forward to get the last data in the
     # buffer.  We are always guaranteed that slot zero will contain

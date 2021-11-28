@@ -5,7 +5,7 @@
  */
 
 #include <kernel.h>
-#include <power/reboot.h>
+#include <sys/reboot.h>
 #include <openthread/instance.h>
 #include <openthread/platform/misc.h>
 
@@ -29,4 +29,9 @@ otPlatResetReason otPlatGetResetReason(otInstance *aInstance)
 void otPlatWakeHost(void)
 {
 	/* TODO */
+}
+
+void otPlatAssertFail(const char *aFilename, int aLineNumber)
+{
+	__ASSERT(false, "OpenThread ASSERT @ %s:%d", aFilename, aLineNumber);
 }

@@ -25,6 +25,21 @@
 #define BASEPRI_MODIFIED_2 0x40
 #define SWAP_RETVAL        0x1234
 
+#ifndef EXC_RETURN_FTYPE
+/* bit [4] allocate stack for floating-point context: 0=done 1=skipped  */
+#define EXC_RETURN_FTYPE           (0x00000010UL)
+#endif
+
+#if defined(CONFIG_ARMV8_1_M_MAINLINE)
+/*
+ * For ARMv8.1-M, the FPSCR[18:16] LTPSIZE field may always read 0b010 if MVE
+ * is not implemented, so mask it when validating the value of the FPSCR.
+ */
+#define FPSCR_MASK		(~FPU_FPDSCR_LTPSIZE_Msk)
+#else
+#define FPSCR_MASK		(0xffffffffU)
+#endif
+
 extern void z_move_thread_to_end_of_prio_q(struct k_thread *thread);
 
 static struct k_thread alt_thread;
@@ -163,38 +178,38 @@ static void verify_fp_callee_saved(const struct _preempt_float *src,
 		" 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x\n"
 		" expected:  0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x"
 		" 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x 0x%0x\n",
-		src->s16,
-		src->s17,
-		src->s18,
-		src->s19,
-		src->s20,
-		src->s21,
-		src->s22,
-		src->s23,
-		src->s24,
-		src->s25,
-		src->s26,
-		src->s27,
-		src->s28,
-		src->s29,
-		src->s30,
-		src->s31,
-		dst->s16,
-		dst->s17,
-		dst->s18,
-		dst->s19,
-		dst->s20,
-		dst->s21,
-		dst->s22,
-		dst->s23,
-		dst->s24,
-		dst->s25,
-		dst->s26,
-		dst->s27,
-		dst->s28,
-		dst->s29,
-		dst->s30,
-		dst->s31
+		(double)src->s16,
+		(double)src->s17,
+		(double)src->s18,
+		(double)src->s19,
+		(double)src->s20,
+		(double)src->s21,
+		(double)src->s22,
+		(double)src->s23,
+		(double)src->s24,
+		(double)src->s25,
+		(double)src->s26,
+		(double)src->s27,
+		(double)src->s28,
+		(double)src->s29,
+		(double)src->s30,
+		(double)src->s31,
+		(double)dst->s16,
+		(double)dst->s17,
+		(double)dst->s18,
+		(double)dst->s19,
+		(double)dst->s20,
+		(double)dst->s21,
+		(double)dst->s22,
+		(double)dst->s23,
+		(double)dst->s24,
+		(double)dst->s25,
+		(double)dst->s26,
+		(double)dst->s27,
+		(double)dst->s28,
+		(double)dst->s29,
+		(double)dst->s30,
+		(double)dst->s31
 	);
 }
 
@@ -254,9 +269,9 @@ static void alt_thread_entry(void)
 		__get_CONTROL());
 
 	/* Verify that the _current_ (alt) thread is
-	 * initialized with mode.FPCA cleared
+	 * initialized with EXC_RETURN.Ftype set
 	 */
-	zassert_true((_current->arch.mode & CONTROL_FPCA_Msk) == 0,
+	zassert_true((_current->arch.mode_exc_return & EXC_RETURN_FTYPE) != 0,
 		"Alt thread FPCA flag not clear at initialization\n");
 #if defined(CONFIG_MPU_STACK_GUARD)
 	/* Alt thread is created with K_FP_REGS set, so we
@@ -273,11 +288,11 @@ static void alt_thread_entry(void)
 
 
 	/* Verify that the _current_ (alt) thread is initialized with FPSCR cleared. */
-	zassert_true(__get_FPSCR() == 0,
+	zassert_true((__get_FPSCR() & FPSCR_MASK) == 0,
 		"(Alt thread) FPSCR is not cleared at initialization: 0x%x\n", __get_FPSCR());
 
-	zassert_true((p_ztest_thread->arch.mode & CONTROL_FPCA_Msk) != 0,
-		"ztest thread mode FPCA flag not updated at swap-out: 0x%0x\n",
+	zassert_true((p_ztest_thread->arch.mode_exc_return & EXC_RETURN_FTYPE) == 0,
+		"ztest thread mode Ftype flag not updated at swap-out: 0x%0x\n",
 		p_ztest_thread->arch.mode);
 
 	/* Verify that the main test thread (ztest) has stored the FP
@@ -447,8 +462,8 @@ void test_arm_thread_swap(void)
 
 #if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
 	/* The main test thread is not (yet) actively using the FP registers */
-	zassert_true((_current->arch.mode & CONTROL_FPCA_Msk) == 0,
-		"Thread FPCA flag not clear at initialization 0x%0x\n",
+	zassert_true((_current->arch.mode_exc_return & EXC_RETURN_FTYPE) != 0,
+		"Thread Ftype flag not set at initialization 0x%0x\n",
 		_current->arch.mode);
 
 	/* Verify that the main test thread is initialized with FPCA cleared. */
@@ -456,7 +471,7 @@ void test_arm_thread_swap(void)
 		"CONTROL.FPCA is not cleared at initialization: 0x%x\n",
 		__get_CONTROL());
 	/* Verify that the main test thread is initialized with FPSCR cleared. */
-	zassert_true(__get_FPSCR() == 0,
+	zassert_true((__get_FPSCR() & FPSCR_MASK) == 0,
 		"FPSCR is not cleared at initialization: 0x%x\n", __get_FPSCR());
 
 	/* Clear the thread's floating-point callee-saved registers' container.
@@ -476,8 +491,8 @@ void test_arm_thread_swap(void)
 	/* The main test thread is using the FP registers, but the .mode
 	 * flag is not updated until the next context switch.
 	 */
-	zassert_true((_current->arch.mode & CONTROL_FPCA_Msk) == 0,
-		"Thread FPCA flag not clear at initialization\n");
+	zassert_true((_current->arch.mode_exc_return & EXC_RETURN_FTYPE) != 0,
+		"Thread Ftype flag not set at initialization\n");
 #if defined(CONFIG_MPU_STACK_GUARD)
 	zassert_true((_current->arch.mode &
 		Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) == 0,
@@ -700,8 +715,8 @@ void test_arm_thread_swap(void)
 	/* The main test thread is using the FP registers, and the .mode
 	 * flag and MPU GUARD flag are now updated.
 	 */
-	zassert_true((_current->arch.mode & CONTROL_FPCA_Msk) != 0,
-		"Thread FPCA flag not set after main returned back\n");
+	zassert_true((_current->arch.mode_exc_return & EXC_RETURN_FTYPE) == 0,
+		"Thread Ftype flag not cleared after main returned back\n");
 #if defined(CONFIG_MPU_STACK_GUARD)
 	zassert_true((_current->arch.mode &
 		Z_ARM_MODE_MPU_GUARD_FLOAT_Msk) != 0,

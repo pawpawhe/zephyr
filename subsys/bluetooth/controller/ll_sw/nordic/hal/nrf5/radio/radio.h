@@ -48,7 +48,11 @@ void *radio_pkt_decrypt_get(void);
 void radio_switch_complete_and_rx(uint8_t phy_rx);
 void radio_switch_complete_and_tx(uint8_t phy_rx, uint8_t flags_rx, uint8_t phy_tx,
 				  uint8_t flags_tx);
+void radio_switch_complete_and_b2b_tx(uint8_t phy_curr, uint8_t flags_curr,
+				      uint8_t phy_next, uint8_t flags_next);
 void radio_switch_complete_and_disable(void);
+
+uint8_t radio_phy_flags_rx_get(void);
 
 void radio_rssi_measure(void);
 uint32_t radio_rssi_get(void);
@@ -80,6 +84,8 @@ uint32_t radio_tmr_aa_get(void);
 void radio_tmr_aa_save(uint32_t aa);
 uint32_t radio_tmr_aa_restore(void);
 uint32_t radio_tmr_ready_get(void);
+void radio_tmr_ready_save(uint32_t ready);
+uint32_t radio_tmr_ready_restore(void);
 void radio_tmr_end_capture(void);
 uint32_t radio_tmr_end_get(void);
 uint32_t radio_tmr_tifs_base_get(void);
@@ -88,6 +94,8 @@ uint32_t radio_tmr_sample_get(void);
 
 void radio_gpio_pa_setup(void);
 void radio_gpio_lna_setup(void);
+void radio_gpio_pdn_setup(void);
+void radio_gpio_csn_setup(void);
 void radio_gpio_lna_on(void);
 void radio_gpio_lna_off(void);
 void radio_gpio_pa_lna_enable(uint32_t trx_us);
@@ -102,4 +110,9 @@ void radio_ar_configure(uint32_t nirk, void *irk, uint8_t flags);
 uint32_t radio_ar_match_get(void);
 void radio_ar_status_reset(void);
 uint32_t radio_ar_has_match(void);
-void radio_ar_resolve(uint8_t *addr);
+void radio_ar_resolve(const uint8_t *addr);
+
+/* Enables CTE inline configuration to automatically setup sampling and
+ * switching according to CTEInfo in received PDU.
+ */
+void radio_df_cte_inline_set_enabled(bool cte_info_in_s1);

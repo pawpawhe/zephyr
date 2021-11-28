@@ -17,7 +17,7 @@ K_SEM_DEFINE(sem, 0, 1);
 
 #ifdef CONFIG_FDC2X1X_TRIGGER
 static void trigger_handler(const struct device *dev,
-			    struct sensor_trigger *trigger)
+			    const struct sensor_trigger *trigger)
 {
 	switch (trigger->type) {
 	case SENSOR_TRIG_DATA_READY:
@@ -34,24 +34,20 @@ static void trigger_handler(const struct device *dev,
 #endif
 
 #ifdef CONFIG_PM_DEVICE
-static void pm_cb(const struct device *dev,
-		  int status,
-		  void *context,
-		  void *arg)
+static void pm_info(enum pm_device_action action, int status)
 {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(arg);
-
-	switch (*(uint32_t *)context) {
-	case DEVICE_PM_ACTIVE_STATE:
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
 		printk("Enter ACTIVE_STATE ");
 		break;
-	case DEVICE_PM_LOW_POWER_STATE:
-		printk("Enter LOW_POWER_STATE ");
+	case PM_DEVICE_ACTION_SUSPEND:
+		printk("Enter SUSPEND_STATE ");
 		break;
-	case DEVICE_PM_OFF_STATE:
+	case PM_DEVICE_ACTION_TURN_OFF:
 		printk("Enter OFF_STATE ");
 		break;
+	default:
+		printk("Unknown power state");
 	}
 
 	if (status) {
@@ -62,22 +58,22 @@ static void pm_cb(const struct device *dev,
 }
 #endif
 
+#define DEVICE_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(ti_fdc2x1x)
+
 void main(void)
 {
 	struct sensor_value ch_buf[] = {
-		DT_FOREACH_CHILD(DT_INST(0, ti_fdc2x1x), CH_BUF_INIT)
+		DT_FOREACH_CHILD(DEVICE_NODE, CH_BUF_INIT)
 	};
 
 	uint8_t num_ch = ARRAY_SIZE(ch_buf);
 	enum sensor_channel base;
 	int i;
 
-	const struct device *dev =
-		device_get_binding(DT_LABEL(DT_INST(0, ti_fdc2x1x)));
+	const struct device *dev = DEVICE_DT_GET(DEVICE_NODE);
 
-	if (dev == NULL) {
-		printk("Could not get %s device\n",
-		       DT_LABEL(DT_INST(0, ti_fdc2x1x)));
+	if (!device_is_ready(dev)) {
+		printk("Device %s is not ready\n", dev->name);
 		return;
 	}
 
@@ -95,16 +91,20 @@ void main(void)
 
 #ifdef CONFIG_PM_DEVICE
 	/* Testing the power modes */
-	uint32_t p_state;
+	enum pm_device_action p_action;
+	int ret;
 
-	p_state = DEVICE_PM_LOW_POWER_STATE;
-	device_set_power_state(dev, p_state, pm_cb, NULL);
+	p_action = PM_DEVICE_ACTION_SUSPEND;
+	ret = pm_device_action_run(dev, p_action);
+	pm_info(p_action, ret);
 
-	p_state = DEVICE_PM_OFF_STATE;
-	device_set_power_state(dev, p_state, pm_cb, NULL);
+	p_action = PM_DEVICE_ACTION_TURN_OFF;
+	ret = pm_device_action_run(dev, p_action);
+	pm_info(p_action, ret);
 
-	p_state = DEVICE_PM_ACTIVE_STATE;
-	device_set_power_state(dev, p_state, pm_cb, NULL);
+	p_action = PM_DEVICE_ACTION_RESUME;
+	ret = pm_device_action_run(dev, p_action);
+	pm_info(p_action, ret);
 #endif
 
 	while (1) {
@@ -132,11 +132,13 @@ void main(void)
 
 
 #ifdef CONFIG_PM_DEVICE
-		p_state = DEVICE_PM_OFF_STATE;
-		device_set_power_state(dev, p_state, pm_cb, NULL);
+		p_action = PM_DEVICE_ACTION_TURN_OFF;
+		ret = pm_device_action_run(dev, p_action);
+		pm_info(p_action, ret);
 		k_sleep(K_MSEC(2000));
-		p_state = DEVICE_PM_ACTIVE_STATE;
-		device_set_power_state(dev, p_state, pm_cb, NULL);
+		p_action = PM_DEVICE_ACTION_RESUME;
+		ret = pm_device_action_run(dev, p_action);
+		pm_info(p_action, ret);
 #elif CONFIG_FDC2X1X_TRIGGER_NONE
 		k_sleep(K_MSEC(100));
 #endif

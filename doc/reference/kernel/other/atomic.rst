@@ -3,8 +3,9 @@
 Atomic Services
 ###############
 
-An :dfn:`atomic variable` is a 32-bit variable that can be read and modified
-by threads and ISRs in an uninterruptible manner.
+An :dfn:`atomic variable` is one that can be read and modified
+by threads and ISRs in an uninterruptible manner. It 32-bit on
+32-bit machines and 64-bit on 64-bit machines.
 
 .. contents::
     :local:
@@ -106,9 +107,9 @@ Configuration Options
 
 Related configuration options:
 
-* :option:`CONFIG_ATOMIC_OPERATIONS_BUILTIN`
-* :option:`CONFIG_ATOMIC_OPERATIONS_ARCH`
-* :option:`CONFIG_ATOMIC_OPERATIONS_C`
+* :kconfig:`CONFIG_ATOMIC_OPERATIONS_BUILTIN`
+* :kconfig:`CONFIG_ATOMIC_OPERATIONS_ARCH`
+* :kconfig:`CONFIG_ATOMIC_OPERATIONS_C`
 
 API Reference
 *************
@@ -117,4 +118,3 @@ API Reference
     All atomic services APIs can be used by both threads and ISRs.
 
 .. doxygengroup:: atomic_apis
-   :project: Zephyr

@@ -6,13 +6,14 @@
 #ifndef ZEPHYR_INCLUDE_LOGGING_LOG_CTRL_H_
 #define ZEPHYR_INCLUDE_LOGGING_LOG_CTRL_H_
 
-#include <logging/log_backend.h>
 #include <kernel.h>
+#include <logging/log_backend.h>
+#include <logging/log_msg.h>
+#include <logging/log_internal.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Logger
@@ -29,7 +30,7 @@ extern "C" {
  * @{
  */
 
-typedef uint32_t (*timestamp_get_t)(void);
+typedef log_timestamp_t (*log_timestamp_get_t)(void);
 
 /** @brief Function system initialization of the logger.
  *
@@ -63,7 +64,8 @@ void log_thread_set(k_tid_t process_tid);
  *
  * @return 0 on success or error.
  */
-int log_set_timestamp_func(timestamp_get_t timestamp_getter, uint32_t freq);
+int log_set_timestamp_func(log_timestamp_get_t timestamp_getter,
+			   uint32_t freq);
 
 /**
  * @brief Switch the logger subsystem to the panic mode.
@@ -106,11 +108,11 @@ uint32_t log_src_cnt_get(uint32_t domain_id);
 /** @brief Get name of the source (module or instance).
  *
  * @param domain_id Domain ID.
- * @param src_id    Source ID.
+ * @param source_id Source ID.
  *
  * @return Source name or NULL if invalid arguments.
  */
-const char *log_source_name_get(uint32_t domain_id, uint32_t src_id);
+const char *log_source_name_get(uint32_t domain_id, uint32_t source_id);
 
 /** @brief Get name of the domain.
  *
@@ -125,29 +127,28 @@ const char *log_domain_name_get(uint32_t domain_id);
  *
  * @param backend	Backend instance.
  * @param domain_id	ID of the domain.
- * @param src_id	Source (module or instance) ID.
+ * @param source_id	Source (module or instance) ID.
  * @param runtime	True for runtime filter or false for compiled in.
  *
  * @return		Severity level.
  */
 uint32_t log_filter_get(struct log_backend const *const backend,
-		     uint32_t domain_id, uint32_t src_id, bool runtime);
+			uint32_t domain_id, int16_t source_id, bool runtime);
 
 /**
  * @brief Set filter on given source for the provided backend.
  *
  * @param backend	Backend instance. NULL for all backends.
  * @param domain_id	ID of the domain.
- * @param src_id	Source (module or instance) ID.
+ * @param source_id	Source (module or instance) ID.
  * @param level		Severity level.
  *
  * @return Actual level set which may be limited by compiled level. If filter
  *	   was set for all backends then maximal level that was set is returned.
  */
 __syscall uint32_t log_filter_set(struct log_backend const *const backend,
-			       uint32_t domain_id,
-			       uint32_t src_id,
-			       uint32_t level);
+				  uint32_t domain_id, int16_t source_id,
+				  uint32_t level);
 
 /**
  *
@@ -169,7 +170,47 @@ void log_backend_enable(struct log_backend const *const backend,
  */
 void log_backend_disable(struct log_backend const *const backend);
 
-#if defined(CONFIG_LOG) && !defined(CONFIG_LOG_MINIMAL)
+/**
+ * @brief Get current number of allocated buffers for string duplicates.
+ */
+uint32_t log_get_strdup_pool_current_utilization(void);
+
+/**
+ * @brief Get maximal number of simultaneously allocated buffers for string
+ *	  duplicates.
+ *
+ * Value can be used to determine pool size.
+ */
+uint32_t log_get_strdup_pool_utilization(void);
+
+/**
+ * @brief Get length of the longest string duplicated.
+ *
+ * Value can be used to determine buffer size in the string duplicates pool.
+ */
+uint32_t log_get_strdup_longest_string(void);
+
+/**
+ * @brief Check if there is pending data to be processed by the logging subsystem.
+ *
+ * Function can be used to determine if all logs have been flushed. Function
+ * returns false when deferred mode is not enabled.
+ *
+ * @retval true There is pending data.
+ * @retval false No pending data to process.
+ */
+static inline bool log_data_pending(void)
+{
+	if (IS_ENABLED(CONFIG_LOG2_MODE_DEFERRED)) {
+		return z_log_msg2_pending();
+	} else if (IS_ENABLED(CONFIG_LOG_MODE_DEFERRED)) {
+		return log_msg_mem_get_used() > 0;
+	}
+
+	return false;
+}
+
+#if defined(CONFIG_LOG) && !defined(CONFIG_LOG_MODE_MINIMAL)
 #define LOG_CORE_INIT() log_core_init()
 #define LOG_INIT() log_init()
 #define LOG_PANIC() log_panic()

@@ -13,6 +13,7 @@
  */
 
 #include <kernel.h>
+#include <kernel_arch_data.h>
 #include <logging/log.h>
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
@@ -24,7 +25,7 @@ static void esf_dump(const z_arch_esf_t *esf)
 		esf->basic.a4, esf->basic.ip, esf->basic.lr);
 	LOG_ERR(" xpsr:  0x%08x", esf->basic.xpsr);
 #if defined(CONFIG_FPU) && defined(CONFIG_FPU_SHARING)
-	for (int i = 0; i < 16; i += 4) {
+	for (int i = 0; i < ARRAY_SIZE(esf->s); i += 4) {
 		LOG_ERR("s[%2d]:  0x%08x  s[%2d]:  0x%08x"
 			"  s[%2d]:  0x%08x  s[%2d]:  0x%08x",
 			i, (uint32_t)esf->s[i],
@@ -83,9 +84,9 @@ void z_do_kernel_oops(const z_arch_esf_t *esf)
 	unsigned int reason = esf->basic.r0;
 
 #if defined(CONFIG_USERSPACE)
-	if ((__get_CONTROL() & CONTROL_nPRIV_Msk) == CONTROL_nPRIV_Msk) {
+	if (z_arm_preempted_thread_in_user_mode(esf)) {
 		/*
-		 * Exception triggered from nPRIV mode.
+		 * Exception triggered from user mode.
 		 *
 		 * User mode is only allowed to induce oopses and stack check
 		 * failures via software-triggered system fatal exceptions.
