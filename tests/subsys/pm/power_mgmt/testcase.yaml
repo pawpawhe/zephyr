@@ -1,0 +1,4 @@
+tests:
+  subsys.pm.device_pm:
+    platform_allow: native_posix
+    tags: power

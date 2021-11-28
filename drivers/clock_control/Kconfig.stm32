@@ -1,0 +1,124 @@
+# STM32 MCU clock control driver config
+
+# Copyright (c) 2017 Linaro
+# Copyright (c) 2017 RnDity Sp. z o.o.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig CLOCK_CONTROL_STM32_CUBE
+	bool "STM32 Reset & Clock Control"
+	depends on SOC_FAMILY_STM32
+	select USE_STM32_LL_UTILS
+	select USE_STM32_LL_RCC if SOC_SERIES_STM32MP1X
+	help
+	  Enable driver for Reset & Clock Control subsystem found
+	  in STM32 family of MCUs
+
+if CLOCK_CONTROL_STM32_CUBE
+
+DT_STM32_HSE_CLOCK := $(dt_nodelabel_path,clk_hse)
+DT_STM32_HSE_CLOCK_FREQ := $(dt_node_int_prop_int,$(DT_STM32_HSE_CLOCK),clock-frequency)
+
+config CLOCK_STM32_HSE_CLOCK
+	int "HSE clock value"
+	default "$(DT_STM32_HSE_CLOCK_FREQ)" if "$(dt_nodelabel_enabled,clk_hse)"
+	default 8000000
+	help
+	  Value of external high-speed clock (HSE). This symbol could be optionally
+	  configured using device tree by setting "clock-frequency" value of clk_hse
+	  node. For instance:
+	  &clk_hse{
+	  status = "okay";
+	  clock-frequency = <DT_FREQ_M(25)>;
+	  };
+	  Note: Device tree configuration is overridden when current symbol is set:
+	  CONFIG_CLOCK_STM32_HSE_CLOCK=32000000
+
+# Micro-controller Clock output configuration options
+
+choice
+	prompt "STM32 MCO1 Clock Source"
+	default CLOCK_STM32_MCO1_SRC_NOCLOCK
+
+config CLOCK_STM32_MCO1_SRC_NOCLOCK
+	bool "NOCLOCK"
+	help
+	  MCO1 output disabled, no clock on MCO1
+
+config CLOCK_STM32_MCO1_SRC_LSE
+	bool "LSE"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use LSE as source of MCO1
+
+config CLOCK_STM32_MCO1_SRC_HSE
+	bool "HSE"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use HSE as source of MCO1
+
+config CLOCK_STM32_MCO1_SRC_HSI
+	bool "HSI"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use HSI as source of MCO1
+
+config CLOCK_STM32_MCO1_SRC_PLLCLK
+	bool "PLLCLK"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use PLLCLK as source of MCO1
+
+endchoice
+
+config CLOCK_STM32_MCO1_DIV
+	int "MCO1 prescaler"
+	depends on !CLOCK_STM32_MCO1_SRC_NOCLOCK
+	default 1
+	range 1   5
+	help
+	  allowed values: 1, 2, 3, 4, 5
+
+choice
+	prompt "STM32 MCO2 Clock Source"
+	default CLOCK_STM32_MCO2_SRC_NOCLOCK
+
+config CLOCK_STM32_MCO2_SRC_NOCLOCK
+	bool "NOCLOCK"
+	help
+	  MCO2 output disabled, no clock on MCO2
+
+config CLOCK_STM32_MCO2_SRC_SYSCLK
+	bool "SYSCLK"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use SYSCLK as source of MCO2
+
+config CLOCK_STM32_MCO2_SRC_PLLI2S
+	bool "PLLI2S"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use PLLI2S as source of MCO2
+
+config CLOCK_STM32_MCO2_SRC_HSE
+	bool "HSE"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use HSE as source of MCO2
+
+config CLOCK_STM32_MCO2_SRC_PLLCLK
+	bool "PLLCLK"
+	depends on SOC_SERIES_STM32F4X
+	help
+	  Use PLLCLK as source of MCO2
+
+endchoice
+
+config CLOCK_STM32_MCO2_DIV
+	int "MCO2 prescaler"
+	depends on !CLOCK_STM32_MCO2_SRC_NOCLOCK
+	default 1
+	range 1 5
+	help
+	  allowed values: 1, 2, 3, 4, 5
+
+endif # CLOCK_CONTROL_STM32_CUBE

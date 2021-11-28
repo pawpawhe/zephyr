@@ -1,0 +1,18 @@
+identifier: hifive1
+name: SiFive HiFive1
+type: mcu
+arch: riscv32
+toolchain:
+  - zephyr
+ram: 16
+simulation: renode
+supported:
+  - pwm
+  - gpio
+  - spi
+testing:
+  ignore_tags:
+    - net
+    - bluetooth
+    - flash
+    - newlib
